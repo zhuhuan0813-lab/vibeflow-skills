@@ -1,11 +1,12 @@
 <!doctype html>
 <html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>两个技能的使用说明</title>
 <style>
-*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#233748;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}main{max-width:850px;margin:30px auto;padding:36px 42px;background:#fff;border-radius:12px}h1{margin:0 0 12px;font-size:28px;line-height:1.5}h2{font-size:20px;color:#1d5677;margin:28px 0 10px}p{margin:10px 0}a{color:#13699a}.download{display:inline-block;background:#166a91;color:white;text-decoration:none;padding:9px 20px;border-radius:7px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:12px;border-bottom:1px solid #dde5eb;text-align:left;vertical-align:top}th{background:#f0f5f8}th:first-child,td:first-child{width:43%;overflow-wrap:anywhere}pre{background:#f1f5f8;border-radius:7px;padding:14px 18px;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.8 Consolas,"Microsoft YaHei",monospace}li{margin:7px 0}.note{color:#667b88;font-size:14px}.label{font-weight:600;margin-bottom:4px}code{font-family:Consolas,"Microsoft YaHei",monospace}@media(max-width:650px){main{margin:0;padding:24px 20px;border-radius:0}h1{font-size:25px}table{font-size:14px}td,th{padding:10px 8px}}@media print{body{background:white}main{margin:0;padding:0;max-width:none}.download{background:none;color:#13699a;padding:0}h2{break-after:avoid}tr,pre{break-inside:avoid}}
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#233748;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}main{max-width:850px;margin:30px auto;padding:36px 42px;background:#fff;border-radius:12px}h1{margin:0 0 12px;font-size:28px;line-height:1.5}h2{font-size:20px;color:#1d5677;margin:28px 0 10px}h3{font-size:17px;margin:20px 0 6px}p{margin:10px 0}a{color:#13699a}.download{display:inline-block;background:#166a91;color:white;text-decoration:none;padding:9px 20px;border-radius:7px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:12px;border-bottom:1px solid #dde5eb;text-align:left;vertical-align:top}th{background:#f0f5f8}th:first-child,td:first-child{width:35%;overflow-wrap:anywhere}pre{background:#f1f5f8;border-radius:7px;padding:14px 18px;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.8 Consolas,"Microsoft YaHei",monospace}li{margin:7px 0}.note{color:#667b88;font-size:14px}.label{font-weight:600;margin-bottom:4px}code{font-family:Consolas,"Microsoft YaHei",monospace}details{border:1px solid #dde5eb;border-radius:7px;padding:12px 16px;margin:16px 0}summary{cursor:pointer;font-weight:600}.tip{background:#edf6fa;border-left:4px solid #287599;padding:12px 16px}nav{font-size:14px;margin:8px 0 20px}nav a{margin-right:16px}section{scroll-margin-top:20px}@media(max-width:650px){main{margin:0;padding:24px 20px;border-radius:0}h1{font-size:25px}table{font-size:14px}td,th{padding:10px 8px}}@media print{body{background:white}main{margin:0;padding:0;max-width:none}.download{background:none;color:#13699a;padding:0}h2,h3{break-after:avoid}tr,pre{break-inside:avoid}}
 </style></head><body><main>
 <h1>两个技能的使用说明</h1>
-<p>这两个技能帮助 AI 按已有流程开展飞行器设计和仿真工作。<strong>GitHub用于下载说明和技能文件，实际使用在 Codex 或 VibeFlow 中完成。</strong></p>
+<p>这两个技能帮助 AI 按已有流程开展飞行器设计和仿真工作。<strong>可以不使用 VibeFlow：使用能够访问项目文件、执行本地命令的 Codex 等 AI 工具，配合实际工程软件即可。</strong>GitHub 用于下载文件。</p>
 <a class="download" href="skills.zip" download>下载技能文件</a>
+<nav aria-label="说明目录"><a href="#install">安装技能</a><a href="#environment">环境与路径</a><a href="#use">开始使用</a><a href="#problems">常见问题</a></nav>
 
 <h2>1 能做什么</h2>
 <table><thead><tr><th>技能名称</th><th>用途</th></tr></thead><tbody>
@@ -13,7 +14,7 @@
 <tr><td>vibeflow-starccm</td><td>配合 STAR-CCM+ 准备仿真算例、编写批处理脚本、检查计算结果。</td></tr>
 </tbody></table>
 
-<h2>2 怎么安装</h2>
+<section id="install"><h2>2 怎么安装</h2>
 <ol>
 <li>下载并解压同目录的<strong>skills.zip</strong>，得到两个技能文件夹。</li>
 <li>如果使用 Codex，把这两个<strong>完整文件夹</strong>复制到项目的 <code>.agents/skills/</code> 目录；目录不存在时先创建。</li>
@@ -24,22 +25,86 @@
     skills/
       vibeflow-aircraft-design/
       vibeflow-starccm/</pre>
-<p class="note">使用 VibeFlow Studio 时，放入该软件配置的技能目录。文件夹里的 SKILL.md、references 和 agents 都应保留，不需要逐个修改。</p>
+<p class="note">使用 VibeFlow Studio 时，放入该软件配置的技能目录。文件夹里的 SKILL.md、references 和 agents 都应保留，不需要逐个修改。Codex 的目录约定见 <a href="https://learn.chatgpt.com/docs/build-skills">OpenAI 官方技能说明</a>。</p></section>
 
-<h2>3 怎么使用</h2>
+<section id="environment"><h2>3 环境和路径怎么配置</h2>
+<p class="tip"><strong>最简单的做法：</strong>准备本次用到的软件，把下面的路径清单填好后发给 AI，先检查环境，再开始项目工作。不必额外创建配置文件。</p>
+<h3>① 按任务准备软件</h3>
+<table><thead><tr><th>要做的工作</th><th>需要准备什么</th></tr></thead><tbody>
+<tr><td>阅读说明、整理分析流程</td><td>AI 工具和本技能包即可；不需要启动求解器。</td></tr>
+<tr><td>运行 Python 脚本</td><td>可运行的 Python 3 环境；依赖按实际脚本或项目的 requirements.txt 安装。优先复用已有环境。</td></tr>
+<tr><td>OpenVSP 建模／VSPAERO 分析</td><td>相应的 OpenVSP 发行包及命令行程序。Python API 仅在脚本确实调用它时需要，并须匹配该发行包要求的 Python 版本。</td></tr>
+<tr><td>STAR-CCM+ 仿真</td><td>已安装的 STAR-CCM+、可用计算许可，以及与软件版本兼容的模板／Java 宏。</td></tr>
+<tr><td>ParaView 后处理</td><td>只有使用 ParaView 脚本时才需要 ParaView／pvpython；仅生成 Python 图表时按相应脚本准备依赖。</td></tr>
+</tbody></table>
+<p class="note">只准备本次任务需要的工具。本包提供流程指引，不包含工程软件、FFD 程序、机身模型或仿真结果；已有程序和项目输入需要另行提供。</p>
+
+<h3>② 填写这份路径清单</h3>
+<p>在软件安装目录找到对应的启动文件，复制其完整地址。<strong>软件路径填写到文件，项目路径填写到文件夹。</strong>把下面的尖括号内容换成自己的实际值，不用的项目写“未使用”。</p>
+<pre id="path-template">运行位置：&lt;Windows 本地 / WSL / Linux 服务器，说明各工具在哪边运行&gt;
+项目文件夹：&lt;PROJECT_ROOT&gt;
+模型或算例文件：&lt;MODEL_OR_CASE_FILE&gt;
+Python：&lt;PYTHON_EXE；OpenVSP API 若使用另一环境，请另行注明&gt;
+OpenVSP 脚本程序：&lt;VSPSCRIPT_EXE&gt;
+VSPAERO：&lt;VSPAERO_EXE&gt;
+STAR-CCM+：&lt;STARCCM_STARTER&gt;
+ParaView Python：&lt;PVPYTHON_EXE，未使用可不填&gt;
+已有模板／脚本：&lt;TEMPLATE_OR_SCRIPT，按需填写&gt;
+软件版本：&lt;已知版本；未知时请 AI 检查&gt;</pre>
+<ul>
+<li><strong>Python：</strong>填写实际环境里的 python.exe 或 python；不要只填环境文件夹。</li>
+<li><strong>OpenVSP：</strong>采用命令行脚本方式时提供 vspscript.exe／vspscript；采用 Python API 时提供兼容的 Python 环境；运行气动求解还需 vspaero.exe／vspaero。</li>
+<li><strong>STAR-CCM+：</strong>填写本机可用的 starccm+.bat／starccm+ 启动程序，不能只填安装根目录。</li>
+<li><strong>Windows 与 WSL：</strong>同一文件在 Windows 中可能写作 &lt;盘符&gt;:\&lt;目录&gt;，在 WSL 中对应 /mnt/&lt;小写盘符&gt;/&lt;目录&gt;。Python 包要装在实际执行脚本的那个环境里；Windows 程序的调用方式需单独验证。</li>
+</ul>
+<p>清单可以直接发到项目对话里。经常使用时，也可保存在<strong>自己项目的 AGENTS.md</strong> 中作为本机路径记录，不需要修改两个技能的原文。</p>
+
+<h3>③ 让 AI 先验证</h3>
+<pre>这是我的软件路径清单（粘贴上面的内容）。
+请按本次任务检查：路径是否存在、Python 是否可执行、所需模块能否导入、求解器版本是否匹配。
+先报告哪些可用、哪些缺失，以及需要修改的路径；不要启动正式求解。
+若缺少依赖，请按实际脚本列出安装到哪个环境的命令。</pre>
+<p class="note">路径存在，只说明找到了文件；还要分别检查启动、模块导入与实际运行。首次正式使用时验证一个小算例，才能判断许可、模板和结果导出是否可用。</p>
+
+<details><summary>需要手动检查时：Windows PowerShell 命令</summary>
+<p>先将占位符换成实际路径，只保留本次使用的工具。以下是<strong>当前 PowerShell 会话中的临时变量</strong>，用于手动检查，不会修改系统设置，也不会自动配置已经打开的 AI 应用。</p>
+<pre id="environment-code">$taskPython = '&lt;PYTHON_EXE&gt;'
+$taskVspScript = '&lt;VSPSCRIPT_EXE&gt;'
+$taskVspaero = '&lt;VSPAERO_EXE&gt;'
+$taskStarccm = '&lt;STARCCM_STARTER&gt;'
+
+# 检查本次配置的启动文件是否存在
+Test-Path -LiteralPath $taskPython
+Test-Path -LiteralPath $taskVspScript
+Test-Path -LiteralPath $taskVspaero
+Test-Path -LiteralPath $taskStarccm
+
+# 确认实际运行的是哪个 Python
+&amp; $taskPython -c "import sys; print(sys.executable); print(sys.version)"
+
+# 仅读取 STAR-CCM+ 版本，不加载或求解算例
+&amp; $taskStarccm -version</pre>
+<p class="note">这里只验证程序路径和版本。正式运行时，由 AI 把路径传给相应脚本，或按脚本支持的配置方式设置。路径含空格时保留引号，PowerShell 用 &amp; 调用程序。</p>
+</details></section>
+
+<section id="use"><h2>4 怎么使用</h2>
 <p class="label">飞行器设计示例</p>
 <pre>请使用 vibeflow-aircraft-design，根据我提供的模型和工况，整理建模与气动分析步骤，并说明还缺少哪些必要输入。</pre>
 <p class="label">STAR-CCM+ 示例</p>
-<pre>请使用 vibeflow-starccm，检查我的仿真设置并生成批量计算脚本，先不要启动计算。</pre>
+<pre>请使用 vibeflow-starccm，按我提供的环境和路径清单检查仿真设置，生成批量计算脚本，先不要启动计算。</pre>
+<p>提供本次模型、工况、单位及已有配置。没有 VibeFlow 时，由 AI 直接调用脚本和软件，保留命令、日志和结果文件。运行参数与本机软件路径分开记录。</p></section>
 
-<h2>4 使用前准备什么</h2>
-<ul>
-<li>提供本次项目的模型、工况和已有配置文件。</li>
-<li>实际计算时，需要相应软件及可用许可，并确认软件路径和版本。技能文件不包含软件或原项目的数据。</li>
-</ul>
+<section id="problems"><h2>5 常见问题怎么处理</h2>
+<table><thead><tr><th>遇到的情况</th><th>先检查这里</th></tr></thead><tbody>
+<tr><td>AI 没有识别技能</td><td>确认打开了正确项目，两个技能各自保留 SKILL.md，目录层级与第 2 节一致；再重新打开会话。</td></tr>
+<tr><td>找不到程序／路径返回 False</td><td>检查是否填到了实际启动文件、文件是否搬迁，以及当前运行位置是 Windows 还是 WSL。</td></tr>
+<tr><td>Python 提示缺少模块</td><td>先确认 sys.executable 输出，再给同一个解释器安装实际缺失的依赖；不要只凭环境名称判断。</td></tr>
+<tr><td>STAR-CCM+ 版本可读但无法计算</td><td>根据启动日志检查许可、模板版本和 Java 宏兼容性；版本检查通过不代表计算已通过。</td></tr>
+</tbody></table>
 <p class="note">本简版只保留两个主技能。遇到其他技能引用时按当前任务补充；接收者首次使用应先检查环境并验证一个小算例。</p>
+</section>
 
-<h2>5 以后怎么下载</h2>
+<h2>6 以后怎么下载</h2>
 <p>打开仓库首页，点击<strong>下载技能 ZIP</strong>即可获得两个技能。将本说明和skills.zip放在同一个文件夹后，可以离线阅读并使用下载按钮。</p>
-<p class="note">来源：现有 VibeFlow 技能文件，本次仅整理，原文未修改。对外分享范围按原提供方授权确认。</p>
+<p class="note">来源：现有 VibeFlow 技能文件，技能原文未修改。对外分享范围按原提供方授权确认。</p>
 </main></body></html>

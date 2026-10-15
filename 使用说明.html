@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>两个技能的使用说明</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#f4f6f8;color:#233748;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}main{max-width:850px;margin:30px auto;padding:36px 42px;background:#fff;border-radius:12px}h1{margin:0 0 12px;font-size:28px;line-height:1.5}h2{font-size:20px;color:#1d5677;margin:28px 0 10px}p{margin:10px 0}a{color:#13699a}.download{display:inline-block;background:#166a91;color:white;text-decoration:none;padding:9px 20px;border-radius:7px;margin:8px 0}table{width:100%;border-collapse:collapse;font-size:15px}th,td{padding:12px;border-bottom:1px solid #dde5eb;text-align:left;vertical-align:top}th{background:#f0f5f8}th:first-child,td:first-child{width:43%;overflow-wrap:anywhere}pre{background:#f1f5f8;border-radius:7px;padding:14px 18px;white-space:pre-wrap;overflow-wrap:anywhere;font:14px/1.8 Consolas,"Microsoft YaHei",monospace}li{margin:7px 0}.note{color:#667b88;font-size:14px}.label{font-weight:600;margin-bottom:4px}code{font-family:Consolas,"Microsoft YaHei",monospace}@media(max-width:650px){main{margin:0;padding:24px 20px;border-radius:0}h1{font-size:25px}table{font-size:14px}td,th{padding:10px 8px}}@media print{body{background:white}main{margin:0;padding:0;max-width:none}.download{background:none;color:#13699a;padding:0}h2{break-after:avoid}tr,pre{break-inside:avoid}}
+</style></head><body><main>
+<h1>两个技能的使用说明</h1>
+<p>这两个技能帮助 AI 按已有流程开展飞行器设计和仿真工作。<strong>GitHub用于下载说明和技能文件，实际使用在 Codex 或 VibeFlow 中完成。</strong></p>
+<a class="download" href="skills.zip" download>下载技能文件</a>
+
+<h2>1 能做什么</h2>
+<table><thead><tr><th>技能名称</th><th>用途</th></tr></thead><tbody>
+<tr><td>vibeflow-aircraft-design</td><td>整理飞行器设计需求，配合 OpenVSP / VSPAERO 开展建模、气动分析和方案比较。</td></tr>
+<tr><td>vibeflow-starccm</td><td>配合 STAR-CCM+ 准备仿真算例、编写批处理脚本、检查计算结果。</td></tr>
+</tbody></table>
+
+<h2>2 怎么安装</h2>
+<ol>
+<li>下载并解压同目录的<strong>skills.zip</strong>，得到两个技能文件夹。</li>
+<li>如果使用 Codex，把这两个<strong>完整文件夹</strong>复制到项目的 <code>.agents/skills/</code> 目录；目录不存在时先创建。</li>
+<li>在 Codex 中打开该项目，输入下面的使用示例。如果未识别，重新打开会话后检查。</li>
+</ol>
+<pre>项目目录/
+  .agents/
+    skills/
+      vibeflow-aircraft-design/
+      vibeflow-starccm/</pre>
+<p class="note">使用 VibeFlow Studio 时，放入该软件配置的技能目录。文件夹里的 SKILL.md、references 和 agents 都应保留，不需要逐个修改。</p>
+
+<h2>3 怎么使用</h2>
+<p class="label">飞行器设计示例</p>
+<pre>请使用 vibeflow-aircraft-design，根据我提供的模型和工况，整理建模与气动分析步骤，并说明还缺少哪些必要输入。</pre>
+<p class="label">STAR-CCM+ 示例</p>
+<pre>请使用 vibeflow-starccm，检查我的仿真设置并生成批量计算脚本，先不要启动计算。</pre>
+
+<h2>4 使用前准备什么</h2>
+<ul>
+<li>提供本次项目的模型、工况和已有配置文件。</li>
+<li>实际计算时，需要相应软件及可用许可，并确认软件路径和版本。技能文件不包含软件或原项目的数据。</li>
+</ul>
+<p class="note">本简版只保留两个主技能。遇到其他技能引用时按当前任务补充；接收者首次使用应先检查环境并验证一个小算例。</p>
+
+<h2>5 以后怎么下载</h2>
+<p>打开仓库首页，点击<strong>下载技能 ZIP</strong>即可获得两个技能。将本说明和skills.zip放在同一个文件夹后，可以离线阅读并使用下载按钮。</p>
+<p class="note">来源：现有 VibeFlow 技能文件，本次仅整理，原文未修改。对外分享范围按原提供方授权确认。</p>
+</main></body></html>

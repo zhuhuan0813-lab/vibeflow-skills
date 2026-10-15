@@ -1,0 +1,1285 @@
+<!doctype html><html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>代码备注：舱盖 FFD 与 STAR</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f1f5f8;color:#263b4b;font:16px/1.85 system-ui,"Microsoft YaHei",sans-serif}main{max-width:1000px;margin:28px auto;padding:30px 38px;background:white;border-radius:12px}h1{font-size:28px;line-height:1.45;margin:0 0 12px}h2{font-size:21px;color:#175e83;margin:28px 0 10px}p{margin:9px 0}a{color:#14668e}table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:10px 12px;text-align:left;vertical-align:top;border-bottom:1px solid #dde6ed;overflow-wrap:anywhere}th{background:#edf4f8}td:first-child{width:49%}.flow{background:#edf5f9;padding:15px 18px;border-radius:7px;font-weight:600}.tip{padding:12px 16px;border-left:4px solid #3a8870;background:#eef7f2}.note{color:#647887;font-size:14px}details{border:1px solid #dce5eb;border-radius:6px;padding:11px 15px;margin:13px 0;scroll-margin-top:18px}summary{cursor:pointer;font-weight:600;overflow-wrap:anywhere}pre{font:13px/1.8 Consolas,"Microsoft YaHei",monospace;white-space:pre-wrap;overflow-wrap:anywhere;background:#f4f7f9;padding:13px 16px;border-radius:6px}code{font-family:Consolas,"Microsoft YaHei",monospace}li{margin:7px 0}footer{font-size:13px;color:#647887;border-top:1px solid #dde6ed;padding-top:15px;margin-top:26px}@media(max-width:650px){main{padding:24px 18px;margin:0;border-radius:0}h1{font-size:24px}th,td{padding:9px 7px}td:first-child{width:46%}}@media print{body{background:white}main{margin:0;padding:0}h2,summary{break-after:avoid}}
+</style></head><body><main>
+<h1>代码备注：先知道每段代码负责什么</h1>
+<p>日常运行仍然只需双击 <strong>开始使用.cmd</strong>。这份备注用于读懂代码和项目交接；下面的完整源码默认折叠，按需要展开即可。</p>
+<div class="flow">双击入口 → 菜单程序 → FFD 变形与检查 → 米制 STAR 输入 → 三个 Java 宏 → 结果报告</div>
+<h2>1．最先看这三个位置</h2>
+<ol><li><strong>看操作流程：</strong><code>_program/start.py</code>。从 menu 找到数字对应的函数，重点看 generate、calculate 和 report。</li><li><strong>看变形怎么实现：</strong><code>_generate.py</code>。看“哪些点可以动 → 权重怎样变化 → 怎样归一化到最大位移”。</li><li><strong>看怎么连接 STAR：</strong><code>prepare_from_ffd.py</code> 与 <code>run_fresh_batch.py</code>。前者交几何和参数，后者启动软件；真正求解由 Java 宏完成。</li></ol>
+<p class="note">文件位置：start.py 在解压后的 project/_program；其他核心代码在 _program/core.zip 内。生成模型后，可在“结果/批次…/程序”找到 FFD 和转换脚本，在“结果/批次…/cfd”找到 STAR 宏和后处理。也可直接在本页展开阅读。</p>
+<h2>2．各个文件的作用</h2><table><thead><tr><th>文件（点击定位源码）</th><th>负责什么</th></tr></thead><tbody><tr><td><a href="#src0">开始使用.cmd</a></td><td>双击入口：读取配置，再启动菜单。</td></tr><tr><td><a href="#src1">_program/start.py</a></td><td>菜单、批次目录、环境检查、数据保护与自动衔接。</td></tr><tr><td><a href="#src2">ffd/run_ffd.py</a></td><td>把源码目录加入 Python 搜索路径，进入 FFD 命令行。</td></tr><tr><td><a href="#src3">ffd/run_ffd.ps1</a></td><td>手动复现时使用的 Windows→WSL 调用包装。</td></tr><tr><td><a href="#src4">ffd/src/canopy_ffd_tool/__init__.py</a></td><td>包入口与版本号。</td></tr><tr><td><a href="#src5">ffd/src/canopy_ffd_tool/cli.py</a></td><td>读取 --config、--output、单位及方案号。</td></tr><tr><td><a href="#src6">ffd/src/canopy_ffd_tool/engine.py</a></td><td>读配置、检查输入、调用后端、生成查看器与运行清单。</td></tr><tr><td><a href="#src7">ffd/src/canopy_ffd_tool/backend/_generate.py</a></td><td>FFD 核心：分区、边缘权重、控制点、最大位移归一化和导出。</td></tr><tr><td><a href="#src8">ffd/src/canopy_ffd_tool/backend/_intersections.py</a></td><td>检查变动三角形相关的交叉与闭合拓扑。</td></tr><tr><td><a href="#src9">prepare_from_ffd.py</a></td><td>毫米转米，按 caseDict 生成 STAR 几何与 solver.properties。</td></tr><tr><td><a href="#src10">cfd/UDF/run_fresh_batch.py</a></td><td>按算例启动 STAR，保存日志和批次状态。</td></tr><tr><td><a href="#src11">cfd/UDF/BuildCanopy.java</a></td><td>导入几何、创建流体域、映射边界并建网格。</td></tr><tr><td><a href="#src12">cfd/UDF/SolveCanopy.java</a></td><td>设置 SST 流场与力报告，初始化并执行初始迭代。</td></tr><tr><td><a href="#src13">cfd/UDF/AdvanceCanopy.java</a></td><td>继续迭代、判断收敛、导出结果与最终 .sim。</td></tr><tr><td><a href="#src14">cfd/D-post/postprocess.py</a></td><td>读取真实历史，生成对比表、图片和 HTML 报告。</td></tr></tbody></table>
+<h2>3．需要改什么，应该去哪里</h2>
+<table><thead><tr><th>想调整的内容</th><th>应修改的位置与注意事项</th></tr></thead><tbody>
+<tr><td>本机软件路径</td><td>优先使用菜单 5；路径保存在 settings.json。</td></tr>
+<tr><td>舱盖变形模式与幅度</td><td>FFD 的 configs/canopy_10.json；targetMaxMm 是最大表面节点位移，单位 mm。简易入口使用固定的 10 方案，改源码包后要开新批次并重新检查。</td></tr>
+<tr><td>工况、网格与收敛判据</td><td>CFD 的 0-caseDict/caseDict；再生成 solver.properties。简易入口锁定 50 m/s、0°、+X 和默认统计节奏，其他工况须按详细说明修改与验证。</td></tr>
+<tr><td>FFD 算法、控制点或曲率约束</td><td>_generate.py；当前 105 个格点、最多 27 个非零控制点。平滑边缘权重不等于已经施加曲率约束。</td></tr>
+<tr><td>STAR 对象、边界或求解模型</td><td>三个 Java 宏，需匹配 STAR 版本。不要只改名字而不核对对象与边界映射。</td></tr>
+<tr><td>对比图与统计窗口</td><td>D-post/postprocess.py，同时核对 caseDict 与宏的采样方式。默认末 150 次迭代、每 10 次采样，共 15 个样本。</td></tr>
+</tbody></table>
+<div class="tip"><strong>重要：</strong>settings.json、canopy_10.json 和 caseDict 是 JSON，不能直接插入 # 或 // 注释。说明放在本页或源码里；配置的字段名、单位和结构保留原格式。</div>
+<h2>4．读注释时记住这些约定</h2>
+<ul><li><strong>Python / PowerShell：</strong># 后是注释；<strong>Java：</strong>// 后是注释。CMD 的 REM 注释保持英文 ASCII，以兼容 Windows 入口，中文解释在本页。</li><li><strong>单位：</strong>FFD 原始数据为 mm，prepare_from_ffd 乘一次 0.001 变成 m；STAR 几何和网格尺寸使用 m。</li><li><strong>方向：</strong>来流与阻力为 +X，升力为 +Z；报告中的力作用于完整机身壁面。</li><li><strong>完成与收敛：</strong>最终 .sim、日志标记与 convergence.json 一起检查；仅有文件不能证明收敛，更不能证明优化有效。</li><li><strong>修改后开新批次：</strong>注释也会改变文件哈希。已有批次受输入一致性保护，请保留原结果，用新运行包重新生成。</li></ul>
+<h2>5．查看带注释的完整源码</h2><p class="note">本页展示实际打包的源码，不需要先打开代码编辑器。注释解释意图、单位、输入输出和检查边界，计算逻辑与原版本保持一致；公开版的软件启动路径按接收者环境配置。</p>
+<details id="src0"><summary>开始使用.cmd</summary><p class="note">双击入口：读取配置，再启动菜单。</p><pre><code>@echo off
+REM Keep settings local to this command window.
+setlocal
+REM Use UTF-8 for the Chinese menu and Python messages.
+chcp 65001 &gt;nul
+set &quot;PYTHONUTF8=1&quot;
+REM The project root comes from this CMD file; no fixed project path is required.
+set &quot;CANOPY_HOME=%~dp0&quot;
+REM Read settings.json, select Python if missing, then open the menu in start.py.
+powershell.exe -NoProfile -STA -Command &quot;[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); $ErrorActionPreference=&#x27;Stop&#x27;; try { $root=[IO.Path]::GetFullPath((Join-Path $env:CANOPY_HOME &#x27;.&#x27;)); $cfgPath=Join-Path $root &#x27;settings.json&#x27;; $cfg=Get-Content -LiteralPath $cfgPath -Raw -Encoding UTF8 | ConvertFrom-Json; $py=$cfg.windows_python; if(-not (Test-Path -LiteralPath $py -PathType Leaf)){ Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title=&#x27;Select a working python.exe&#x27;; $d.Filter=&#x27;Python (python.exe)|python.exe|Executable (*.exe)|*.exe&#x27;; if($d.ShowDialog() -ne &#x27;OK&#x27;){exit 1}; $py=$d.FileName; $cfg.windows_python=$py; $cfg | ConvertTo-Json | Set-Content -LiteralPath $cfgPath -Encoding UTF8 }; &amp; $py (Join-Path $root &#x27;_program\start.py&#x27;) --home $root; exit $LASTEXITCODE } catch { Write-Host $_.Exception.Message; exit 1 }&quot;
+if errorlevel 1 pause
+endlocal
+</code></pre></details><details id="src1"><summary>_program/start.py</summary><p class="note">菜单、批次目录、环境检查、数据保护与自动衔接。</p><pre><code>&quot;&quot;&quot;Novice entry for the unchanged FFD/STAR pipeline; geometry and CFD remain in core.zip.
+
+Uses per-run folders and an input fingerprint. Menu 3 is the only action that
+starts STAR calculation. No installer, global environment change or cleanup.
+&quot;&quot;&quot;
+# 中文阅读顺序：menu（菜单）→ generate（生成几何）→ calculate（启动求解）→ report（汇总）。
+# 本文件只负责组织流程，FFD 数学计算和 STAR Java 宏保存在同目录的 core.zip 中。
+# 菜单 1 只检查环境，菜单 2 只处理几何；只有菜单 3 会启动实际 CFD 求解。
+from pathlib import Path
+import argparse
+from contextlib import contextmanager
+import csv
+import datetime as dt
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import uuid
+import zipfile
+
+if hasattr(sys.stdout, &#x27;reconfigure&#x27;):
+    sys.stdout.reconfigure(encoding=&#x27;utf-8&#x27;, errors=&#x27;replace&#x27;)
+if hasattr(sys.stderr, &#x27;reconfigure&#x27;):
+    sys.stderr.reconfigure(encoding=&#x27;utf-8&#x27;, errors=&#x27;replace&#x27;)
+
+# baseline 是原始机身，后面是十个舱盖方案，总共 11 个 CFD 算例。
+# 版本约束来自现有 Java 宏；换 STAR 大版本时要重新核对接口。
+CASES = [&#x27;baseline&#x27;] + [f&#x27;variant_{i:02d}&#x27; for i in range(1, 11)]
+EXPECTED_RELEASE = &#x27;20.06.007&#x27;
+
+class WorkflowError(Exception):
+    pass
+
+def read_json(path):
+    # utf-8-sig 同时兼容普通 UTF-8 和 Windows 工具写入的 UTF-8 BOM。
+    return json.loads(Path(path).read_text(encoding=&#x27;utf-8-sig&#x27;))
+
+def save_json(path, value):
+    # 先写本次独有的临时文件，再替换目标，减少记录写到一半的风险。
+    # 这里保存的是设置和状态，不是删除或覆盖原始模型、求解结果。
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(path.name + &#x27;.tmp.&#x27; + str(os.getpid()) + &#x27;.&#x27; + uuid.uuid4().hex)
+    tmp.write_text(json.dumps(value, ensure_ascii=False, indent=2), encoding=&#x27;utf-8&#x27;)
+    tmp.replace(path)
+
+def settings(home):
+    # home 由双击入口的位置确定，用户只需保存软件路径，不用填写项目根目录。
+    cfg = read_json(home / &#x27;settings.json&#x27;)
+    for key in [&#x27;windows_python&#x27;, &#x27;wsl_python&#x27;, &#x27;wsl_distro&#x27;, &#x27;star&#x27;]:
+        if not isinstance(cfg.get(key), str) or not cfg[key].strip():
+            raise WorkflowError(&#x27;软件位置还没有填完整，请先选择菜单 5。&#x27;)
+    return cfg
+
+def capture(args, timeout=90):
+    # 用于版本/路径等轻量检查；返回标准输出，失败时带回报错供中文提示展示。
+    try:
+        p = subprocess.run(list(map(str, args)), capture_output=True, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise WorkflowError(&#x27;程序无法启动或检查超时：&#x27; + str(args[0]) + &#x27;\n&#x27; + str(e)) from e
+    out = p.stdout.decode(&#x27;utf-8-sig&#x27;, errors=&#x27;replace&#x27;)
+    err = p.stderr.decode(&#x27;utf-8-sig&#x27;, errors=&#x27;replace&#x27;)
+    if p.returncode:
+        raise WorkflowError(f&#x27;程序返回错误 {p.returncode}：{args[0]}\n&#x27; + (err or out)[-1600:])
+    return out
+
+def wsl_args(cfg, args):
+    # --exec 后直接传程序和独立参数，不把用户路径拼成 bash 命令字符串。
+    return [&#x27;wsl.exe&#x27;, &#x27;-d&#x27;, cfg[&#x27;wsl_distro&#x27;], &#x27;--exec&#x27;, *map(str, args)]
+
+def wsl_path(cfg, path):
+    # 同一份文件在 Windows 与 WSL 中写法不同，统一交给 wslpath 转换。
+    # 取以 / 开头的路径行，避免把 WSL 启动提示误当成目录。
+    output = capture(wsl_args(cfg, [&#x27;wslpath&#x27;, &#x27;-a&#x27;, &#x27;-u&#x27;, str(Path(path).resolve())]))
+    candidates = [s.strip() for s in output.splitlines() if s.strip().startswith(&#x27;/&#x27;)]
+    if not candidates:
+        raise WorkflowError(&#x27;无法把项目路径转换为 WSL 路径。请检查菜单 5 的 WSL 发行版。&#x27;)
+    return candidates[-1]
+
+def child(args, logfile, timeout=3600):
+    # 每次执行都使用带时间戳的新日志；重试时保留上次日志，便于定位失败阶段。
+    # 子程序非零退出立即中止当前流程，避免把部分生成的文件当作完成结果。
+    logfile = Path(logfile)
+    logfile.parent.mkdir(parents=True, exist_ok=True)
+    logfile = logfile.with_name(logfile.stem + &#x27;_&#x27; + dt.datetime.now().strftime(&#x27;%Y%m%d_%H%M%S_%f&#x27;) + logfile.suffix)
+    try:
+        with logfile.open(&#x27;xb&#x27;) as stream:
+            p = subprocess.run(list(map(str, args)), stdout=stream, stderr=subprocess.STDOUT, timeout=timeout)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise WorkflowError(&#x27;本步骤没有完成。已保留日志：&#x27; + str(logfile) + &#x27;\n&#x27; + str(e)) from e
+    if p.returncode:
+        raise WorkflowError(&#x27;本步骤失败，暂不进入下一步。日志：\n&#x27; + str(logfile))
+
+def check_windows(cfg):
+    # 文件存在不代表解释器可用，因此实际读取 Python 版本和 sys.executable。
+    py = Path(cfg[&#x27;windows_python&#x27;])
+    if not py.is_file():
+        raise WorkflowError(&#x27;Windows Python 路径无效，请在菜单 5 选择实际 python.exe。&#x27;)
+    value = json.loads(capture([py, &#x27;-c&#x27;, &#x27;import json,sys;print(json.dumps({&quot;version&quot;:list(sys.version_info[:3]),&quot;path&quot;:sys.executable}))&#x27;]))
+    if value[&#x27;version&#x27;] &lt; [3, 10, 0]:
+        raise WorkflowError(&#x27;需要 Python 3.10 或更新版本。&#x27;)
+    return &#x27;Windows Python &#x27; + &#x27;.&#x27;.join(map(str, value[&#x27;version&#x27;]))
+
+def check_geometry(cfg):
+    # 依赖在 WSL 的 Python 中导入；Windows 安装的包不会自动供 WSL 使用。
+    output = capture(wsl_args(cfg, [cfg[&#x27;wsl_python&#x27;], &#x27;-c&#x27;, &#x27;import numpy,scipy,pyvista,vtk,matplotlib;print(&quot;WSL geometry environment OK&quot;)&#x27;]))
+    if &#x27;WSL geometry environment OK&#x27; not in output:
+        raise WorkflowError(&#x27;WSL 的 Python 检查没有返回预期结果。&#x27;)
+    return &#x27;所需的 5 个 Python 库均可导入&#x27;
+
+def check_star(cfg):
+    # -version 只验证入口与版本；许可、Java API、建网格是否成功要看实际基线。
+    if not Path(cfg[&#x27;star&#x27;]).is_file():
+        raise WorkflowError(&#x27;STAR 启动文件不存在，请在菜单 5 选择 starccm+.bat。&#x27;)
+    # .bat needs cmd; list2cmdline follows the original driver&#x27;s Windows launch convention.
+    try:
+        p = subprocess.run(subprocess.list2cmdline([cfg[&#x27;star&#x27;], &#x27;-version&#x27;]), shell=True, capture_output=True, timeout=90)
+    except (OSError, subprocess.TimeoutExpired) as e:
+        raise WorkflowError(&#x27;STAR 版本检查没有完成：&#x27; + str(e)) from e
+    output = (p.stdout + p.stderr).decode(&#x27;utf-8&#x27;, errors=&#x27;replace&#x27;)
+    if p.returncode or EXPECTED_RELEASE not in output:
+        raise WorkflowError(&#x27;STAR 版本检查未通过。当前宏需要 2510 / 20.06.007-R8，请核对启动路径和版本。&#x27;)
+    return &#x27;STAR-CCM+ 20.06.007 系列；许可与实际求解将在基线中验证&#x27;
+
+def check_environment(home):
+    # 各项检查分别记录，出错时让用户知道该修 Python、WSL 还是 STAR 路径。
+    cfg = settings(home)
+    checks = []
+    print(&#x27;\n正在检查电脑，本步骤不启动 CFD。&#x27;)
+    for name, fn in [(&#x27;Windows Python&#x27;, check_windows), (&#x27;WSL 与几何依赖&#x27;, check_geometry), (&#x27;STAR 版本&#x27;, check_star)]:
+        try:
+            detail = fn(cfg)
+            checks.append({&#x27;name&#x27;: name, &#x27;ok&#x27;: True, &#x27;detail&#x27;: detail})
+            print(&#x27;  [通过] &#x27; + name + &#x27;：&#x27; + detail)
+        except WorkflowError as e:
+            checks.append({&#x27;name&#x27;: name, &#x27;ok&#x27;: False, &#x27;detail&#x27;: str(e)})
+            print(&#x27;  [需要处理] &#x27; + name + &#x27;：&#x27; + str(e))
+    save_json(home / &#x27;结果&#x27; / &#x27;电脑检查.json&#x27;, checks)
+    if not all(x[&#x27;ok&#x27;] for x in checks):
+        raise WorkflowError(&#x27;检查没有全部通过。按提示处理；软件位置不对时选择菜单 5。&#x27;)
+    print(&#x27;\n电脑检查通过。接下来选择 2，生成模型。&#x27;)
+
+def unpack_core(payload, root):
+    # 每次生成都解压到全新批次，保留旧批次；xb 模式不允许覆盖已有文件。
+    # CFD 模板放到批次/cfd，其余脚本和输入放到批次/程序，便于区分运行产物。
+    root = Path(root).resolve()
+    if root.exists():
+        raise WorkflowError(&#x27;本批次目录已存在，程序不会覆盖。&#x27;)
+    root.mkdir(parents=True)
+    with zipfile.ZipFile(payload) as z:
+        for entry in z.infolist():
+            parts = Path(entry.filename).parts
+            if not parts or parts[0] != &#x27;project&#x27; or &#x27;..&#x27; in parts:
+                raise WorkflowError(&#x27;运行包目录不正确。&#x27;)
+            rel = Path(*parts[1:])
+            if not rel.parts:
+                continue
+            if rel.parts[0] == &#x27;cfd&#x27;:
+                target = root / rel
+            else:
+                target = root / &#x27;程序&#x27; / rel
+            target = target.resolve()
+            # ZIP 成员只能写入本批次目录，不能通过 ../ 等路径写到其他位置。
+            if not target.is_relative_to(root):
+                raise WorkflowError(&#x27;运行包包含越界路径。&#x27;)
+            if entry.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+            else:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                with target.open(&#x27;xb&#x27;) as out:
+                    out.write(z.read(entry))
+
+def contract(cfd):
+    # 简易入口锁定已确认的工况和完整 10 方案，防止改一个数字却沿用不适配的宏。
+    # 这里只做当前入口的适用范围检查，不代表 CFD 的物理精度已经验证。
+    cfg = read_json(cfd / &#x27;0-caseDict/caseDict&#x27;)
+    if cfg[&#x27;flow&#x27;][&#x27;speed&#x27;] != 50 or cfg[&#x27;flow&#x27;][&#x27;aoa&#x27;] != 0 or cfg[&#x27;flow&#x27;][&#x27;direction&#x27;] != [1, 0, 0] or cfg[&#x27;flow&#x27;][&#x27;rotors&#x27;]:
+        raise WorkflowError(&#x27;简易入口用于 50 m/s、0°、+X、无旋翼工况。修改工况请使用详细教程并重新验证。&#x27;)
+    if [x[&#x27;id&#x27;] for x in cfg[&#x27;variants&#x27;]] != [f&#x27;{i:02d}&#x27; for i in range(1, 11)]:
+        raise WorkflowError(&#x27;简易入口要求完整的 10 个方案。&#x27;)
+    if cfg[&#x27;solver&#x27;][&#x27;sampleEvery&#x27;] != 10 or cfg[&#x27;solver&#x27;][&#x27;convergenceWindow&#x27;] != 150:
+        raise WorkflowError(&#x27;简易入口使用原有的 10 次采样与 150 次窗口设置。&#x27;)
+    return cfg
+
+def fingerprint(cfd):
+    # 为几何、配置、宏和后处理记录 SHA-256；计算前复查，防止混用修改后的输入。
+    # 注释也会改变文件哈希，因此修改已有批次脚本后应建立新批次。
+    paths = [cfd / &#x27;0-caseDict/caseDict&#x27;, cfd / &#x27;0-caseDict/solver.properties&#x27;, *sorted((cfd / &#x27;A-geo&#x27;).glob(&#x27;*.stl&#x27;)), *sorted((cfd / &#x27;UDF&#x27;).glob(&#x27;*.java&#x27;)), cfd / &#x27;UDF/run_fresh_batch.py&#x27;, cfd / &#x27;D-post/postprocess.py&#x27;]
+    return {str(p.relative_to(cfd)).replace(&#x27;\\&#x27;, &#x27;/&#x27;): hashlib.sha256(p.read_bytes()).hexdigest() for p in paths}
+
+def open_file(path, no_open=False):
+    # --no-open 用于命令检查与自动测试；正常使用时交给 Windows 默认程序打开 HTML。
+    print(&#x27;文件位置：&#x27; + str(path))
+    if not no_open and os.name == &#x27;nt&#x27;:
+        try:
+            os.startfile(str(path))
+        except OSError:
+            print(&#x27;未能自动打开，请双击上面的 HTML 文件。&#x27;)
+
+def generate(home, no_open=False):
+    # 菜单 2：只做 FFD、几何验收、mm→m 转换和 STAR 命令预览，不求解流场。
+    cfg = settings(home)
+    print(&#x27;\n正在生成原始机身和 10 组舱盖方案，本步骤不启动 CFD。&#x27;)
+    check_geometry(cfg)
+    stamp = dt.datetime.now().strftime(&#x27;批次_%Y%m%d_%H%M%S_%f&#x27;)
+    # 微秒时间戳让连续两次“生成模型”形成独立目录，旧结果不被覆盖。
+    root = home / &#x27;结果&#x27; / stamp
+    unpack_core(home / &#x27;_program/core.zip&#x27;, root)
+    cfd = root / &#x27;cfd&#x27;
+    contract(cfd)
+    source_wsl = wsl_path(cfg, root / &#x27;程序&#x27;)
+    root_wsl = wsl_path(cfg, root)
+    print(&#x27;1/3 生成形状并检查几何……&#x27;)
+    # --units mm 是几何导出单位；内部 NPZ 中的坐标和位移同样保持毫米。
+    child(wsl_args(cfg, [cfg[&#x27;wsl_python&#x27;], source_wsl + &#x27;/ffd/run_ffd.py&#x27;, &#x27;--config&#x27;, source_wsl + &#x27;/ffd/configs/canopy_10.json&#x27;, &#x27;--output&#x27;, root_wsl + &#x27;/ffd_result&#x27;, &#x27;--units&#x27;, &#x27;mm&#x27;]), root / &#x27;日志/生成模型.log&#x27;)
+    ffd = read_json(root / &#x27;ffd_result/run_manifest.json&#x27;)
+    # 只有状态完整、检查过交叉且包含十个方案，才继续生成 STAR 输入。
+    if ffd[&#x27;status&#x27;] != &#x27;completed&#x27; or not ffd[&#x27;intersectionsChecked&#x27;] or len(ffd[&#x27;variants&#x27;]) != 10:
+        raise WorkflowError(&#x27;FFD 检查状态不完整，暂不准备 STAR 输入。&#x27;)
+    print(&#x27;2/3 自动转换为米，准备 STAR 输入……&#x27;)
+    # prepare_from_ffd.py 内部只转换一次 mm→m；这里不要手工再缩放 STL。
+    child(wsl_args(cfg, [cfg[&#x27;wsl_python&#x27;], source_wsl + &#x27;/prepare_from_ffd.py&#x27;, &#x27;--ffd-run&#x27;, root_wsl + &#x27;/ffd_result&#x27;, &#x27;--cfd-root&#x27;, root_wsl + &#x27;/cfd&#x27;]), root / &#x27;日志/准备STAR输入.log&#x27;)
+    print(&#x27;3/3 检查将要执行的批处理命令……&#x27;)
+    # --dry-run 打印宏路径与命令，不会启动 STAR 求解，也不能替代许可/API 验证。
+    child([sys.executable, cfd / &#x27;UDF/run_fresh_batch.py&#x27;, &#x27;--root&#x27;, cfd, &#x27;--star&#x27;, cfg[&#x27;star&#x27;], &#x27;--dry-run&#x27;], root / &#x27;日志/命令预览.log&#x27;)
+    state = {&#x27;run&#x27;: stamp, &#x27;projectHome&#x27;: str(home), &#x27;phase&#x27;: &#x27;模型与STAR输入已准备_未计算CFD&#x27;, &#x27;inputHashes&#x27;: fingerprint(cfd)}
+    save_json(root / &#x27;批次状态.json&#x27;, state)
+    # 所有准备步骤完成后才更新“最近批次”，失败目录仍保留供排查。
+    save_json(home / &#x27;结果/最近批次.json&#x27;, {&#x27;run&#x27;: stamp})
+    print(&#x27;\n模型生成完成，三维预览即将打开。看完后，选择 3 才会开始气动计算。&#x27;)
+    open_file(root / &#x27;ffd_result/viewer.html&#x27;, no_open)
+    return root
+
+def latest(home):
+    # 读取最近成功准备的批次，并限制目录位于本项目的“结果”文件夹内。
+    p = home / &#x27;结果/最近批次.json&#x27;
+    if not p.exists():
+        raise WorkflowError(&#x27;还没有生成模型。请先选择菜单 2。&#x27;)
+    name = read_json(p).get(&#x27;run&#x27;, &#x27;&#x27;)
+    if not re.fullmatch(r&#x27;批次_\d{8}_\d{6}_\d{6}&#x27;, name):
+        raise WorkflowError(&#x27;最近批次记录无效。请重新生成模型；已有结果会保留。&#x27;)
+    root = (home / &#x27;结果&#x27; / name).resolve()
+    if not root.is_relative_to((home / &#x27;结果&#x27;).resolve()) or not root.is_dir():
+        raise WorkflowError(&#x27;最近批次目录不存在。请重新生成模型。&#x27;)
+    return root
+
+def validate_inputs(home, root):
+    # 项目搬迁或输入改变后，旧批次不自动继续计算；重新生成以建立新的来源记录。
+    state = read_json(root / &#x27;批次状态.json&#x27;)
+    if state[&#x27;projectHome&#x27;] != str(home) or state[&#x27;inputHashes&#x27;] != fingerprint(root / &#x27;cfd&#x27;):
+        raise WorkflowError(&#x27;本批次位置或输入已改变。为避免混用旧结果，请选择 2 生成新批次。&#x27;)
+    return state
+
+def case_finished(cfd, name, require_converged=True):
+    # 最终 .sim 存在还不够：同时要求历史、收敛 JSON、正常完成日志。
+    # 默认必须 converged=true；诊断报告可显式允许已运行但未收敛的变形方案。
+    folder = cfd / &#x27;C-run&#x27; / name
+    required = [&#x27;final_result.sim&#x27;, &#x27;convergence.json&#x27;, &#x27;history.csv&#x27;, &#x27;batch.log&#x27;]
+    if not all((folder / x).is_file() for x in required):
+        return False
+    if &#x27;VF_STAGE=CASE_COMPLETE&#x27; not in (folder / &#x27;batch.log&#x27;).read_text(encoding=&#x27;utf-8&#x27;, errors=&#x27;replace&#x27;):
+        return False
+    conv = read_json(folder / &#x27;convergence.json&#x27;)
+    return conv.get(&#x27;converged&#x27;) is True if require_converged else True
+
+def report(home, root, cfg, no_open=False):
+    # 只从真实已完成的 11 个算例汇总。基线未收敛或方案缺失时不生成完整排名。
+    validate_inputs(home, root)
+    cfd = root / &#x27;cfd&#x27;
+    if not case_finished(cfd, &#x27;baseline&#x27;):
+        raise WorkflowError(&#x27;基线尚未完成或未收敛，当前只能查看模型。&#x27;)
+    missing = [x for x in CASES if not case_finished(cfd, x, require_converged=False)]
+    if missing:
+        raise WorkflowError(&#x27;还有方案未完成，暂不生成完整对比报告：&#x27; + &#x27;, &#x27;.join(missing))
+    cfd_wsl = wsl_path(cfg, cfd)
+    print(&#x27;正在生成图表和报告……&#x27;)
+    child(wsl_args(cfg, [&#x27;env&#x27;, &#x27;VF_POST_ROOT=&#x27; + cfd_wsl, cfg[&#x27;wsl_python&#x27;], cfd_wsl + &#x27;/D-post/postprocess.py&#x27;]), root / &#x27;日志/生成报告.log&#x27;)
+    # 后处理可能先写出图片再做一致性断言；child 正常退出后才承认报告检查通过。
+    with (cfd / &#x27;D-post/comparison.csv&#x27;).open(encoding=&#x27;utf-8-sig&#x27;, newline=&#x27;&#x27;) as stream:
+        rows = list(csv.DictReader(stream))
+    if len(rows) != 11:
+        raise WorkflowError(&#x27;对比表不是 11 个算例，不能认定完整报告已生成。&#x27;)
+    passed = all(case_finished(cfd, x) for x in CASES)
+    # 区分全部收敛报告和含未收敛方案的诊断报告，避免把“算完”当作“有效”。
+    save_json(root / &#x27;报告检查.json&#x27;, {&#x27;postprocessExitCode&#x27;: 0, &#x27;cases&#x27;: len(rows), &#x27;allConverged&#x27;: passed})
+    state = read_json(root / &#x27;批次状态.json&#x27;)
+    state[&#x27;phase&#x27;] = &#x27;报告已生成_全部满足收敛判据&#x27; if passed else &#x27;诊断报告已生成_存在未收敛方案&#x27;
+    save_json(root / &#x27;批次状态.json&#x27;, state)
+    print(&#x27;\n报告已生成。&#x27; if passed else &#x27;\n报告已生成，但含未收敛方案；请按诊断结果处理，不能据此确认优化有效。&#x27;)
+    open_file(cfd / &#x27;E-report/results.html&#x27;, no_open)
+
+@contextmanager
+def batch_lock(root):
+    # 系统文件锁阻止两个窗口同时计算同一批次；进程结束后锁自动释放。
+    # lock 文件保留并不表示仍在计算，是否占用由操作系统锁状态决定。
+    path = root / &#x27;计算占用.lock&#x27;
+    with path.open(&#x27;a+b&#x27;) as stream:
+        if path.stat().st_size == 0:
+            stream.write(b&#x27;0&#x27;)
+            stream.flush()
+        stream.seek(0)
+        try:
+            if os.name == &#x27;nt&#x27;:
+                import msvcrt
+                msvcrt.locking(stream.fileno(), msvcrt.LK_NBLCK, 1)
+            else:
+                import fcntl
+                fcntl.flock(stream.fileno(), fcntl.LOCK_EX | fcntl.LOCK_NB)
+        except OSError as e:
+            raise WorkflowError(&#x27;这个批次正在另一个窗口计算，请回到原窗口查看。&#x27;) from e
+        try:
+            yield
+        finally:
+            stream.seek(0)
+            if os.name == &#x27;nt&#x27;:
+                msvcrt.locking(stream.fileno(), msvcrt.LK_UNLCK, 1)
+            else:
+                fcntl.flock(stream.fileno(), fcntl.LOCK_UN)
+
+def calculate(home, no_open=False):
+    # 菜单 3 是实际求解入口，先取得批次锁，再检查输入与软件。
+    cfg = settings(home)
+    root = latest(home)
+    with batch_lock(root):
+        calculate_locked(home, root, cfg, no_open)
+
+def calculate_locked(home, root, cfg, no_open=False):
+    # 先计算基线；满足收敛和完成条件后，才继续默认 10 个方案。
+    validate_inputs(home, root)
+    cfd = root / &#x27;cfd&#x27;
+    contract(cfd)
+    check_windows(cfg)
+    check_star(cfg)
+    print(&#x27;\n开始实际 CFD：先计算原始机身，通过后再计算 10 组方案。&#x27;)
+    print(&#x27;每个算例 4 个进程，逐个运行。请保留本窗口；详细进度在本批次日志里。&#x27;)
+    print(&#x27;批次位置：&#x27; + str(root))
+    common = [sys.executable, cfd / &#x27;UDF/run_fresh_batch.py&#x27;, &#x27;--root&#x27;, cfd, &#x27;--star&#x27;, cfg[&#x27;star&#x27;]]
+    child([*common, &#x27;--cases&#x27;, &#x27;baseline&#x27;], root / &#x27;日志/计算基线.log&#x27;, timeout=15000)
+    # 原始 runner 会跳过已有输出，本层仍复查 converged，防止误用未收敛基线。
+    if not case_finished(cfd, &#x27;baseline&#x27;):
+        raise WorkflowError(&#x27;原始机身未通过收敛检查，已停止后续方案计算。请保留本批次日志并交给 AI 排查。&#x27;)
+    print(&#x27;基线通过，正在计算 10 组方案……&#x27;)
+    child(common, root / &#x27;日志/计算全部方案.log&#x27;, timeout=160000)
+    # 全部计算退出后由同一批次的历史生成报告，不复制旧批次的数据。
+    report(home, root, cfg, no_open)
+
+def view(home, no_open=False):
+    # 菜单 4 只打开最近结果；没有通过报告检查时，展示已有几何预览。
+    root = latest(home)
+    check = root / &#x27;报告检查.json&#x27;
+    path = root / &#x27;cfd/E-report/results.html&#x27;
+    if check.is_file() and path.is_file():
+        validate_inputs(home, root)
+        if not read_json(check).get(&#x27;allConverged&#x27;):
+            print(&#x27;此报告包含未收敛方案，属于诊断报告。&#x27;)
+        open_file(path, no_open)
+    else:
+        print(&#x27;当前先查看几何模型；完成计算后会自动生成气动报告。&#x27;)
+        open_file(root / &#x27;ffd_result/viewer.html&#x27;, no_open)
+
+def pick_file(title, filter_text):
+    # 调用 Windows 自带文件选择窗口，软件路径作为数据传递，不作为脚本代码拼接。
+    code = &#x27;[Console]::OutputEncoding=[System.Text.UTF8Encoding]::new($false); Add-Type -AssemblyName System.Windows.Forms; $d=New-Object System.Windows.Forms.OpenFileDialog; $d.Title=$env:CANOPY_PICK_TITLE; $d.Filter=$env:CANOPY_PICK_FILTER; if($d.ShowDialog() -eq &quot;OK&quot;){[Console]::Write($d.FileName)}&#x27;
+    env = dict(os.environ, CANOPY_PICK_TITLE=title, CANOPY_PICK_FILTER=filter_text)
+    p = subprocess.run([&#x27;powershell.exe&#x27;, &#x27;-NoProfile&#x27;, &#x27;-STA&#x27;, &#x27;-Command&#x27;, code], capture_output=True, env=env)
+    if p.returncode:
+        raise WorkflowError(&#x27;文件选择窗口没有打开，可让 AI 帮你填写 settings.json。&#x27;)
+    # PowerShell&#x27;s stdout is redirected; explicitly request Unicode-friendly output below.
+    return p.stdout.decode(&#x27;utf-8-sig&#x27;, errors=&#x27;replace&#x27;).strip()
+
+def configure(home):
+    # 菜单 5 把软件位置集中保存到 settings.json，不修改系统 PATH 或全局安装。
+    cfg = read_json(home / &#x27;settings.json&#x27;)
+    print(&#x27;\n软件位置只需设置一次。项目路径由程序自动识别。&#x27;)
+    print(&#x27;1 选择 Windows Python\n2 选择 STAR 启动文件\n3 修改 WSL Python\n4 修改 WSL 发行版\n0 返回&#x27;)
+    choice = input(&#x27;请选择：&#x27;).strip()
+    if choice == &#x27;1&#x27;:
+        value = pick_file(&#x27;选择实际的 python.exe&#x27;, &#x27;Python (python.exe)|python.exe|Executable (*.exe)|*.exe&#x27;)
+        if value:cfg[&#x27;windows_python&#x27;] = value
+    elif choice == &#x27;2&#x27;:
+        value = pick_file(&#x27;选择 STAR 的 starccm+.bat&#x27;, &#x27;STAR launcher (*.bat;*.exe)|*.bat;*.exe|All files (*.*)|*.*&#x27;)
+        if value:cfg[&#x27;star&#x27;] = value
+    elif choice in [&#x27;3&#x27;, &#x27;4&#x27;]:
+        key = &#x27;wsl_python&#x27; if choice == &#x27;3&#x27; else &#x27;wsl_distro&#x27;
+        print(&#x27;当前值：&#x27; + cfg[key])
+        value = input(&#x27;填写新值（直接回车保留）：&#x27;).strip().strip(&#x27;&quot;&#x27;)
+        if value:cfg[key] = value
+    elif choice == &#x27;0&#x27;:
+        return
+    else:
+        print(&#x27;请选择上面的数字。&#x27;)
+        return
+    save_json(home / &#x27;settings.json&#x27;, cfg)
+    print(&#x27;设置已保存。若修改了 Windows Python，关闭窗口后重新双击“开始使用.cmd”。&#x27;)
+
+def menu(home, no_open=False):
+    # 数字与动作的唯一映射：1检查、2几何、3求解、4查看、5设置。
+    actions = {&#x27;1&#x27;: check_environment, &#x27;2&#x27;: lambda p:generate(p, no_open), &#x27;3&#x27;:lambda p:calculate(p, no_open), &#x27;4&#x27;:lambda p:view(p, no_open), &#x27;5&#x27;:configure}
+    while True:
+        print(&#x27;\n&#x27; + &#x27;=&#x27; * 50)
+        print(&#x27;舱盖 FFD + STAR 简易入口｜50 m/s，0°&#x27;)
+        print(&#x27;1  检查电脑\n2  生成 10 组模型，并打开预览\n3  开始气动计算，并生成报告（会启动 STAR）\n4  查看最近结果\n5  设置软件位置\n0  退出&#x27;)
+        print(&#x27;=&#x27; * 50)
+        choice = input(&#x27;输入数字后按回车：&#x27;).strip()
+        if choice == &#x27;0&#x27;:return
+        if choice not in actions:
+            print(&#x27;请选择 0—5。&#x27;)
+            continue
+        try:
+            actions[choice](home)
+        except (WorkflowError, OSError, ValueError, KeyError) as e:
+            print(&#x27;\n[没有完成]\n&#x27; + str(e))
+            print(&#x27;已有模型和结果均已保留。把这段提示和日志交给 AI 即可排查。&#x27;)
+        input(&#x27;\n按回车返回菜单……&#x27;)
+
+def main():
+    # CLI 参数也供测试使用；普通使用者直接双击 CMD，不必输入这些参数。
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(&#x27;--home&#x27;, type=Path, required=True)
+    parser.add_argument(&#x27;--action&#x27;, choices=[&#x27;menu&#x27;,&#x27;check&#x27;,&#x27;generate&#x27;,&#x27;calculate&#x27;,&#x27;view&#x27;,&#x27;settings&#x27;], default=&#x27;menu&#x27;)
+    parser.add_argument(&#x27;--no-open&#x27;, action=&#x27;store_true&#x27;)
+    args = parser.parse_args()
+    home = args.home.resolve()
+    if os.name != &#x27;nt&#x27;:
+        raise WorkflowError(&#x27;请在 Windows 双击“开始使用.cmd”，WSL 由入口自动调用。&#x27;)
+    if args.action == &#x27;menu&#x27;:menu(home, args.no_open)
+    elif args.action == &#x27;check&#x27;:check_environment(home)
+    elif args.action == &#x27;generate&#x27;:generate(home, args.no_open)
+    elif args.action == &#x27;calculate&#x27;:calculate(home, args.no_open)
+    elif args.action == &#x27;view&#x27;:view(home, args.no_open)
+    else:configure(home)
+
+if __name__ == &#x27;__main__&#x27;:
+    try:
+        main()
+    except (WorkflowError, OSError, ValueError, KeyError) as exc:
+        print(&#x27;\n[没有完成]\n&#x27; + str(exc), file=sys.stderr)
+        raise SystemExit(1)
+</code></pre></details><details id="src2"><summary>ffd/run_ffd.py</summary><p class="note">把源码目录加入 Python 搜索路径，进入 FFD 命令行。</p><pre><code># FFD 命令行入口：从本文件所在目录定位 src，因此不要求先安装为 Python 包。
+# 本文件只转发命令行参数；变形算法在 src/canopy_ffd_tool/backend/_generate.py。
+from pathlib import Path
+import sys
+sys.path.insert(0,str(Path(__file__).resolve().parent/&#x27;src&#x27;))
+from canopy_ffd_tool.cli import main
+# 将 main() 的返回值作为进程退出码，供上层菜单判断成功或失败。
+if __name__==&#x27;__main__&#x27;:raise SystemExit(main())
+</code></pre></details><details id="src3"><summary>ffd/run_ffd.ps1</summary><p class="note">手动复现时使用的 Windows→WSL 调用包装。</p><pre><code># Windows → WSL 启动包装：转换配置和输出路径，再调用 WSL 中的 Python 入口。
+# 若换电脑，只调整发行版与 PythonWSL 等实际路径；脚本不会安装依赖或修改系统环境。
+# 建议由项目菜单启动；此文件可单独用于指定方案、单位或仅检查配置。
+[CmdletBinding()]
+param(
+ [string]$Config = &#x27;configs/canopy_10.json&#x27;,
+ [string]$Output = &#x27;&#x27;,
+ [ValidateSet(&#x27;mm&#x27;,&#x27;m&#x27;)][string]$Units = &#x27;mm&#x27;,
+ [string[]]$Ids = @(),
+ [string]$Distro = &#x27;Ubuntu&#x27;,
+ [string]$PythonWSL = &#x27;/usr/bin/python3&#x27;,
+ [switch]$CheckOnly,
+ [switch]$SkipIntersections
+)
+$ErrorActionPreference = &#x27;Stop&#x27;
+# 相对路径以本脚本目录为基准；wslpath 负责将 D:\... 转为 /mnt/d/...。
+function Get-WslPath([string]$TaskPath) {
+ if (-not [IO.Path]::IsPathRooted($TaskPath)) { $TaskPath = Join-Path $PSScriptRoot $TaskPath }
+ $TaskPath = [IO.Path]::GetFullPath($TaskPath)
+ $result = &amp; wsl.exe -d $Distro --exec wslpath -a -u $TaskPath
+ if ($LASTEXITCODE -ne 0) { throw &quot;Unable to convert path: $TaskPath&quot; }
+ return ($result | Select-Object -Last 1).Trim()
+}
+# 使用 --exec 与参数数组传递命令，保留带空格的路径，不拼接额外 shell 命令。
+$scriptPath = Get-WslPath (Join-Path $PSScriptRoot &#x27;run_ffd.py&#x27;)
+$configPath = Get-WslPath $Config
+$callArgs = @(&#x27;-d&#x27;,$Distro,&#x27;--exec&#x27;,$PythonWSL,$scriptPath,&#x27;--config&#x27;,$configPath,&#x27;--units&#x27;,$Units)
+if ($Output) { $callArgs += @(&#x27;--output&#x27;,(Get-WslPath $Output)) }
+if ($Ids.Count) { $callArgs += @(&#x27;--ids&#x27;) + $Ids }
+# CheckOnly 只验证配置与基准网格；SkipIntersections 跳过检查会在结果清单中明确记录。
+if ($CheckOnly) { $callArgs += &#x27;--check-only&#x27; }
+if ($SkipIntersections) { $callArgs += &#x27;--skip-intersections&#x27; }
+# 退出码原样返回给菜单：0 表示本次命令成功，非 0 应先查看错误和运行日志。
+&amp; wsl.exe @callArgs
+exit $LASTEXITCODE
+</code></pre></details><details id="src4"><summary>ffd/src/canopy_ffd_tool/__init__.py</summary><p class="note">包入口与版本号。</p><pre><code># Python 包入口：外部程序可导入 run；版本号记录当前封装版本，不代表物理精度。
+from .engine import run
+__version__=&quot;0.1.0&quot;
+</code></pre></details><details id="src5"><summary>ffd/src/canopy_ffd_tool/cli.py</summary><p class="note">读取 --config、--output、单位及方案号。</p><pre><code># 命令行参数层：读取用户选项，再统一调用 engine.run()；本文件不实现数值变形。
+import argparse,datetime,json
+from pathlib import Path
+from .engine import run
+
+# argv 留空时读取终端参数；传入列表时可由其他 Python 程序调用。
+def main(argv=None):
+ p=argparse.ArgumentParser(description=&#x27;Local canopy FFD: configuration, geometry checks, STL/VTP and offline HTML viewer.&#x27;)
+ # config 是方案 JSON；units 只选择 STL/VTP 导出坐标单位，内部计算始终使用 mm。
+ # ids 可只生成指定方案；check-only 仅检查配置和输入；skip-intersections 会跳过交叉检查。
+ p.add_argument(&#x27;--config&#x27;,required=True,type=Path);p.add_argument(&#x27;--output&#x27;,type=Path);p.add_argument(&#x27;--units&#x27;,choices=[&#x27;mm&#x27;,&#x27;m&#x27;],default=&#x27;mm&#x27;);p.add_argument(&#x27;--ids&#x27;,nargs=&#x27;+&#x27;);p.add_argument(&#x27;--check-only&#x27;,action=&#x27;store_true&#x27;);p.add_argument(&#x27;--skip-intersections&#x27;,action=&#x27;store_true&#x27;)
+ # 未指定 output 时，在工具 outputs 中创建带时间戳的新运行目录，避免覆盖旧结果。
+ a=p.parse_args(argv);out=a.output or a.config.resolve().parents[1]/&#x27;outputs&#x27;/datetime.datetime.now().astimezone().strftime(&#x27;run_%Y%m%d_%H%M%S_%f&#x27;)
+ try:
+  result=run(a.config,out,units=a.units,ids=a.ids,check_only=a.check_only,intersections=not a.skip_intersections)
+ # 失败通过非零退出码反馈；具体生成日志位于运行目录 D-post。
+ except Exception as e:p.exit(1,f&#x27;FFD failed: {e}\n&#x27;)
+ if a.check_only:print(json.dumps(result,ensure_ascii=False,indent=2))
+ else:print(&#x27;FFD completed: &#x27;+str(out.resolve())+&#x27;\nReport: &#x27;+str(out.resolve()/&#x27;report.html&#x27;))
+ return 0
+</code></pre></details><details id="src6"><summary>ffd/src/canopy_ffd_tool/engine.py</summary><p class="note">读配置、检查输入、调用后端、生成查看器与运行清单。</p><pre><code>&quot;&quot;&quot;Reusable wrapper around the verified 7 x 5 x 3 canopy FFD backend.&quot;&quot;&quot;
+# 封装层：配置检查 → 复制本次输入 → 调用几何后端 → 导出模型和离线报告。
+# 这里不调用 STAR-CCM+，也不把几何检查当作气动性能验证。
+from pathlib import Path
+import base64,csv,datetime,hashlib,html,json,os,re,shutil,subprocess,sys
+import numpy as np
+import pyvista as pv
+from matplotlib import colormaps
+PACKAGE=Path(__file__).resolve().parent
+
+# 输入：方案 JSON 路径、可选方案编号；返回已检查的配置及分区 NPZ 的绝对路径。
+# NPZ 需包含顶点 v、三角形索引 f、每个三角形对应的 CAD 面编号 face_id。
+def read_config(path,ids=None):
+ path=Path(path).resolve();cfg=json.loads(path.read_text(encoding=&#x27;utf-8-sig&#x27;))
+ # 相对输入路径以配置文件所在目录为起点；源坐标必须是 mm，不能仅改单位标签。
+ src=(path.parent/cfg[&#x27;input&#x27;][&#x27;file&#x27;]).resolve()
+ if cfg[&#x27;input&#x27;].get(&#x27;units&#x27;)!=&#x27;mm&#x27;:raise ValueError(&#x27;This backend requires baseline coordinates in millimetres.&#x27;)
+ p=cfg[&#x27;geometry&#x27;][&#x27;ffd&#x27;]
+ # 当前验证范围固定为 7×5×3 网格；轴向第 0、1、5、6 层保持固定。
+ # 这 105 个点是控制格点总数，当前方案最多只有 27 个格点具有非零位移。
+ if p[&#x27;latticeShape&#x27;]!=[7,5,3] or p.get(&#x27;fixedAxialControlPlanes&#x27;)!=[0,1,5,6]:raise ValueError(&#x27;The validated backend uses 7x5x3 with axial planes 0,1,5,6 fixed.&#x27;)
+ if not (0&lt;=p[&#x27;fixedCollarMm&#x27;]&lt;p[&#x27;blendDistanceMm&#x27;]):raise ValueError(&#x27;Require 0 &lt;= fixedCollarMm &lt; blendDistanceMm.&#x27;)
+ if np.any(np.asarray(p[&#x27;boxMax&#x27;])&lt;=np.asarray(p[&#x27;boxMin&#x27;])):raise ValueError(&#x27;Invalid FFD box.&#x27;)
+ # 方案编号同时用于输出文件名；限制字符和重复编号，避免路径混淆。
+ variants=cfg[&#x27;geometry&#x27;][&#x27;variants&#x27;];seen=set()
+ for x in variants:
+  if not re.fullmatch(r&#x27;[A-Za-z0-9_-]+&#x27;,x[&#x27;id&#x27;]) or x[&#x27;id&#x27;] in seen:raise ValueError(&#x27;Variant IDs must be unique, safe filenames.&#x27;)
+  seen.add(x[&#x27;id&#x27;])
+  if x[&#x27;mode&#x27;] not in [&#x27;raise&#x27;,&#x27;lower&#x27;,&#x27;widen&#x27;,&#x27;narrow&#x27;,&#x27;front&#x27;,&#x27;rear&#x27;,&#x27;combined&#x27;]:raise ValueError(&#x27;Unsupported mode: &#x27;+x[&#x27;mode&#x27;])
+  if not np.isfinite(x[&#x27;targetMaxMm&#x27;]) or x[&#x27;targetMaxMm&#x27;]&lt;=0:raise ValueError(&#x27;Require positive finite targetMaxMm.&#x27;)
+ # 选择子集时保留配置中的原始顺序及编号，例如 05、09，不重新编号。
+ if ids:
+  ids=[part.strip() for x in ids for part in str(x).split(&#x27;,&#x27;) if part.strip()]
+  ids=[x.zfill(2) if x.isdigit() and x.zfill(2) in seen else x for x in ids]
+  unknown=set(ids)-seen
+  if unknown:raise ValueError(&#x27;Unknown variant IDs: &#x27;+&#x27;,&#x27;.join(sorted(unknown)))
+  variants=[x for x in variants if x[&#x27;id&#x27;] in ids];cfg[&#x27;geometry&#x27;][&#x27;variants&#x27;]=variants
+ if not variants:raise ValueError(&#x27;No selected variants.&#x27;)
+ # allow_pickle=False 只读取数值数组；随后检查坐标、三角形索引和舱盖分区。
+ with np.load(src,allow_pickle=False) as d:
+  v=d[&#x27;v&#x27;];f=d[&#x27;f&#x27;];face_id=d[&#x27;face_id&#x27;]
+  if v.ndim!=2 or v.shape[1]!=3 or not np.isfinite(v).all():raise ValueError(&#x27;Invalid vertices.&#x27;)
+  if f.ndim!=2 or f.shape[1]!=3 or not np.issubdtype(f.dtype,np.integer) or f.min()&lt;0 or f.max()&gt;=len(v):raise ValueError(&#x27;Invalid triangular connectivity.&#x27;)
+  mask=np.isin(face_id,cfg[&#x27;geometry&#x27;][&#x27;canopyCADFaceIndicesZeroBased&#x27;])
+  if len(face_id)!=len(f) or not mask.any() or mask.all():raise ValueError(&#x27;Region must select a nonempty proper subset of triangles.&#x27;)
+ # 每条无向边恰好被两个三角形使用，是本后端要求的封闭边拓扑条件。
+ # 此项不能证明模型无自交；变形后的自交另由 _intersections.py 检查。
+ edges=np.sort(np.vstack([f[:,[0,1]],f[:,[1,2]],f[:,[2,0]]]),axis=1);_,counts=np.unique(edges,axis=0,return_counts=True)
+ if not np.all(counts==2):raise ValueError(&#x27;This backend requires a closed manifold baseline mesh.&#x27;)
+ cfg[&#x27;input&#x27;][&#x27;file&#x27;]=str(src);return cfg,src
+
+# 将顶点、连接关系和各方案位移嵌入单个 HTML，生成可离线打开的三维查看器。
+# 查看器统一显示 mm，颜色表示位移大小；它不是 CFD 压力云图。
+def make_viewer(root,data,entries):
+ active=np.flatnonzero(data[&#x27;blend&#x27;]&gt;0);canopy=np.zeros(len(data[&#x27;v&#x27;]),np.uint8);canopy[np.unique(data[&#x27;f&#x27;][data[&#x27;canopy_cells&#x27;]])]=1
+ enc=lambda a:base64.b64encode(a.tobytes()).decode()
+ maximum=max(x[&#x27;actualMaxMm&#x27;] for x in entries)
+ p={&#x27;vertices&#x27;:enc(data[&#x27;v&#x27;].astype(&#x27;&lt;f4&#x27;)),&#x27;indices&#x27;:enc(data[&#x27;f&#x27;].astype(&#x27;&lt;u4&#x27;)),&#x27;active&#x27;:enc(active.astype(&#x27;&lt;u4&#x27;)),&#x27;deltas&#x27;:enc(data[&#x27;displacements&#x27;][:,active,:].astype(&#x27;&lt;f4&#x27;)),&#x27;canopy&#x27;:enc(canopy),&#x27;variants&#x27;:entries,&#x27;colors&#x27;:colormaps[&#x27;viridis&#x27;](np.linspace(0,1,33))[:,:3].tolist()}
+ text=(PACKAGE/&#x27;assets/viewer_template.html&#x27;).read_text(encoding=&#x27;utf-8-sig&#x27;)
+ text=text.replace(&#x27;__MODEL_DATA__&#x27;,json.dumps(p,ensure_ascii=False,separators=(&#x27;,&#x27;,&#x27;:&#x27;)).replace(&#x27;&lt;&#x27;,chr(92)+&#x27;u003c&#x27;))
+ default=min(2,len(entries)-1)
+ text=text.replace(&quot;selector.value=&#x27;2&#x27;&quot;,f&quot;selector.value=&#x27;{default}&#x27;&quot;).replace(&#x27;let selected=2&#x27;,f&#x27;let selected={default}&#x27;)
+ text=text.replace(&#x27;mag[i]/127&#x27;,f&#x27;mag[i]/{maximum:.12g}&#x27;).replace(&#x27;&lt;span&gt;127&lt;/span&gt;&#x27;,f&#x27;&lt;span&gt;{maximum:g}&lt;/span&gt;&#x27;)
+ text=text.replace(&#x27;10组模型&#x27;,f&#x27;{len(entries)}组模型&#x27;).replace(&#x27;10 组外形探索&#x27;,f&#x27;{len(entries)} 组外形探索&#x27;)
+ lo=data[&#x27;v&#x27;].min(0);hi=data[&#x27;v&#x27;].max(0);center=(lo+hi)/2;scale=float(np.max(hi-lo)*.55)
+ text=text.replace(&#x27;vec3(0.,0.,1300.)&#x27;,&#x27;vec3(&#x27;+&#x27;,&#x27;.join(f&#x27;{a:.9f}&#x27; for a in center)+&#x27;)&#x27;).replace(&#x27;/3500.&#x27;,f&#x27;/{scale:.9f}&#x27;)
+ text=text.replace(&#x27;#30123b,#466be3,#27c5d4,#61fc6c,#d5e635,#fd9a2a,#d93806,#7a0403&#x27;,&#x27;#440154,#3b528b,#21918c,#5ec962,#fde725&#x27;)
+ cfg=json.loads((root/&#x27;0-caseDict/caseDict&#x27;).read_text(encoding=&#x27;utf-8&#x27;));par=cfg[&#x27;geometry&#x27;][&#x27;ffd&#x27;]
+ note=f&quot;每组 {len(data[&#x27;f&#x27;]):,} 个三角形；改变 {len(active):,} 个区域内部顶点。固定边缘缓冲带 {par[&#x27;fixedCollarMm&#x27;]:g} mm，至 {par[&#x27;blendDistanceMm&#x27;]:g} mm 平滑过渡。&lt;br&gt;本查看器为几何结果，不包含气动计算。查看器坐标及位移单位为 mm；导出 STL 的单位请看运行报告。&quot;
+ text=re.sub(r&#x27;&lt;p class=&quot;note&quot;&gt;.*?&lt;/p&gt;&#x27;,f&#x27;&lt;p class=&quot;note&quot;&gt;{note}&lt;/p&gt;&#x27;,text,flags=re.S)
+ (root/&#x27;viewer.html&#x27;).write_text(text,encoding=&#x27;utf-8&#x27;)
+
+# 主入口：输出本次模型、几何检查、CSV 和 HTML；不修改原始分区 NPZ。
+def run(config,output,units=&#x27;mm&#x27;,ids=None,check_only=False,intersections=True):
+ cfg,src=read_config(config,ids)
+ if units not in [&#x27;mm&#x27;,&#x27;m&#x27;]:raise ValueError(&#x27;Output units must be mm or m.&#x27;)
+ # check_only 到此结束：只说明配置与原始网格检查通过，还没有生成或验收变形模型。
+ if check_only:return {&#x27;valid&#x27;:True,&#x27;input&#x27;:str(src),&#x27;variants&#x27;:[x[&#x27;id&#x27;] for x in cfg[&#x27;geometry&#x27;][&#x27;variants&#x27;]],&#x27;controlGrid&#x27;:[7,5,3],&#x27;totalControlPoints&#x27;:105,&#x27;maximumNonzeroControlPoints&#x27;:27}
+ root=Path(output).resolve()
+ # 拒绝非空输出目录，保护已生成模型、日志和用户文件。
+ if root.exists() and any(root.iterdir()):raise FileExistsError(&#x27;Output directory is not empty; choose a fresh output directory.&#x27;)
+ for name in [&#x27;0-caseDict&#x27;,&#x27;A-geo&#x27;,&#x27;D-post&#x27;]: (root/name).mkdir(parents=True,exist_ok=True)
+ shutil.copy2(src,root/&#x27;A-geo/stl_labeled.npz&#x27;);cfg[&#x27;input&#x27;][&#x27;sourceFile&#x27;]=str(src);cfg[&#x27;input&#x27;][&#x27;file&#x27;]=&#x27;../A-geo/stl_labeled.npz&#x27;;cfg[&#x27;status&#x27;]=&#x27;generating&#x27;;cfg[&#x27;provenance&#x27;][&#x27;packageVersion&#x27;]=&#x27;0.1.0&#x27;;(root/&#x27;0-caseDict/caseDict&#x27;).write_text(json.dumps(cfg,ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;)
+ # 用临时子进程环境传递本次运行根目录；后端从该目录的 caseDict 读取参数。
+ env=os.environ.copy();env[&#x27;FFD_RUN_ROOT&#x27;]=str(root)
+ try:
+  # 几何生成与交叉检查分别记录日志；任一子进程失败就停止，并保留现有证据。
+  for script in [&#x27;_generate.py&#x27;]+([&#x27;_intersections.py&#x27;] if intersections else []):
+   with (root/&#x27;D-post&#x27;/f&#x27;{script[1:-3]}.log&#x27;).open(&#x27;w&#x27;,encoding=&#x27;utf-8&#x27;) as log:subprocess.run([sys.executable,str(PACKAGE/&#x27;backend&#x27;/script)],env=env,stdout=log,stderr=subprocess.STDOUT,check=True)
+  data=np.load(root/&#x27;A-geo/ffd_data.npz&#x27;,allow_pickle=False);entries=json.loads((root/&#x27;A-geo/validation.json&#x27;).read_text(encoding=&#x27;utf-8&#x27;))
+  # 开启交叉检查时，发现新增非邻接三角形交叉即拒绝接受该批输出。
+  if intersections and any(x[&#x27;newIntersectingTrianglePairs&#x27;] for x in entries):raise ValueError(&#x27;New nonadjacent intersections were detected; output is not accepted.&#x27;)
+  v=data[&#x27;v&#x27;];f=data[&#x27;f&#x27;];pv.PolyData(v,np.c_[np.full(len(f),3),f].ravel()).save(root/&#x27;A-geo/models/baseline.stl&#x27;,binary=True)
+  folder=root/&#x27;A-geo/models&#x27; if units==&#x27;mm&#x27; else root/&#x27;A-geo/models_m&#x27;
+  # 源数据和原始几何结果仍保留 mm；选择 m 时额外导出坐标乘 0.001 的模型。
+  # VTP 中 displacement_mm 字段仍以 mm 表示位移，不能按坐标单位误读。
+  if units==&#x27;m&#x27;:
+   folder.mkdir()
+   for k,item in enumerate([{&#x27;id&#x27;:&#x27;baseline&#x27;}]+entries):
+    pts=v if k==0 else v+data[&#x27;displacements&#x27;][k-1];poly=pv.PolyData(pts*.001,np.c_[np.full(len(f),3),f].ravel());name=&#x27;baseline&#x27; if k==0 else &#x27;canopy_ffd_&#x27;+item[&#x27;id&#x27;];poly.save(folder/(name+&#x27;.stl&#x27;),binary=True)
+    if k:poly.point_data[&#x27;displacement_mm&#x27;]=np.linalg.norm(data[&#x27;displacements&#x27;][k-1],axis=1);poly.save(folder/(name+&#x27;.vtp&#x27;))
+  for item in entries:item[&#x27;exportedSTL&#x27;]=str((folder/(&#x27;canopy_ffd_&#x27;+item[&#x27;id&#x27;]+&#x27;.stl&#x27;)).relative_to(root));item[&#x27;exportUnits&#x27;]=units
+  make_viewer(root,data,entries)
+  controls=data[&#x27;controls&#x27;];nonzero=np.count_nonzero(np.linalg.norm(controls,axis=-1)&gt;0,axis=(1,2,3)).tolist()
+  # 清单记录单位、输入哈希、控制点数量和检查范围；physicalSimulationPerformed 明确为 False。
+  # effectiveModeRank 描述本批控制位移字段的线性独立性，不等于全部自由度或优化维数。
+  manifest={&#x27;tool&#x27;:&#x27;canopy_ffd_tool&#x27;,&#x27;version&#x27;:&#x27;0.1.0&#x27;,&#x27;status&#x27;:&#x27;completed&#x27;,&#x27;outputUnits&#x27;:units,&#x27;inputSHA256&#x27;:hashlib.sha256(src.read_bytes()).hexdigest(),&#x27;variants&#x27;:entries,&#x27;controlGrid&#x27;:[7,5,3],&#x27;totalControlPoints&#x27;:105,&#x27;nonzeroControlPointsPerVariant&#x27;:nonzero,&#x27;effectiveModeRank&#x27;:int(np.linalg.matrix_rank(controls.reshape(len(controls),-1))),&#x27;movedVertices&#x27;:int(np.count_nonzero(data[&#x27;blend&#x27;]&gt;0)),&#x27;intersectionsChecked&#x27;:intersections,&#x27;physicalSimulationPerformed&#x27;:False,&#x27;STLDirectory&#x27;:str(folder.relative_to(root)),&#x27;rawDataUnits&#x27;:&#x27;mm&#x27;,&#x27;validationScope&#x27;:&#x27;Closed edge topology plus exported geometry area/normal checks; new nonadjacent intersections involving moved faces when enabled; not a mathematical proof of embedding.&#x27;}
+  (root/&#x27;run_manifest.json&#x27;).write_text(json.dumps(manifest,ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;)
+  with (root/&#x27;summary.csv&#x27;).open(&#x27;w&#x27;,encoding=&#x27;utf-8-sig&#x27;,newline=&#x27;&#x27;) as out:
+   writer=csv.writer(out);writer.writerow([&#x27;id&#x27;,&#x27;name&#x27;,&#x27;mode&#x27;,&#x27;targetMaxMm&#x27;,&#x27;actualMaxMm&#x27;,&#x27;movedVertices&#x27;,&#x27;nonzeroControlPoints&#x27;,&#x27;exportUnits&#x27;,&#x27;STL&#x27;])
+   for item,count in zip(entries,nonzero):writer.writerow([item[&#x27;id&#x27;],item[&#x27;name&#x27;],item[&#x27;mode&#x27;],item[&#x27;targetMaxMm&#x27;],item[&#x27;actualMaxMm&#x27;],item[&#x27;movedVertices&#x27;],count,units,item[&#x27;exportedSTL&#x27;]])
+  cfg=json.loads((root/&#x27;0-caseDict/caseDict&#x27;).read_text(encoding=&#x27;utf-8&#x27;));cfg[&#x27;status&#x27;]=&#x27;geometry_completed&#x27;;cfg[&#x27;validation&#x27;]={&#x27;sourceReused&#x27;:True,&#x27;fixedRegionUnchanged&#x27;:True,&#x27;newIntersectionsChecked&#x27;:intersections,&#x27;physicalSimulationPerformed&#x27;:False};(root/&#x27;0-caseDict/caseDict&#x27;).write_text(json.dumps(cfg,ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;)
+  table=&#x27;&#x27;.join(&#x27;&lt;tr&gt;&lt;td&gt;&#x27;+html.escape(x[&#x27;id&#x27;])+&#x27;&lt;/td&gt;&lt;td&gt;&#x27;+html.escape(x[&#x27;name&#x27;])+&#x27;&lt;/td&gt;&lt;td&gt;&#x27;+str(x[&#x27;actualMaxMm&#x27;])+&#x27;&lt;/td&gt;&lt;td&gt;&lt;a href=&quot;&#x27;+x[&#x27;exportedSTL&#x27;]+&#x27;&quot;&gt;STL (&#x27;+units+&#x27;)&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;&#x27; for x in entries)
+  report=&#x27;&lt;!doctype html&gt;&lt;html lang=&quot;zh-CN&quot;&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;title&gt;FFD运行报告&lt;/title&gt;&lt;style&gt;body{max-width:1000px;margin:40px auto;padding:24px;font:16px/1.7 system-ui,&quot;Microsoft YaHei&quot;;color:#18324a}table{border-collapse:collapse;width:100%}th,td{border-bottom:1px solid #ccd8e4;padding:10px;text-align:left}a{color:#1769aa}&lt;/style&gt;&lt;h1&gt;FFD运行报告&lt;/h1&gt;&lt;p&gt;已生成&#x27;+str(len(entries))+&#x27;组模型。导出单位：&#x27;+units+&#x27;；原始数据与位移单位：mm。&lt;/p&gt;&lt;p&gt;105个控制点，当前方案最多27个非零点。固定区域内部坐标逐点保持不变；气动计算不包含在本次运行中。&lt;/p&gt;&lt;p&gt;&lt;a href=&quot;viewer.html&quot;&gt;打开离线三维对比&lt;/a&gt; · &lt;a href=&quot;summary.csv&quot;&gt;数据表&lt;/a&gt; · &lt;a href=&quot;run_manifest.json&quot;&gt;完整验证记录&lt;/a&gt;&lt;/p&gt;&lt;p&gt;非邻接三角形交叉检查：&#x27;+(&#x27;已执行且未发现新增交叉&#x27; if intersections else &#x27;本次跳过，不能据此确认未新增交叉&#x27;)+&#x27;&lt;/p&gt;&lt;table&gt;&lt;tr&gt;&lt;th&gt;编号&lt;/th&gt;&lt;th&gt;方案&lt;/th&gt;&lt;th&gt;最大位移/mm&lt;/th&gt;&lt;th&gt;模型&lt;/th&gt;&lt;/tr&gt;&#x27;+table+&#x27;&lt;/table&gt;&lt;/html&gt;&#x27;
+  (root/&#x27;report.html&#x27;).write_text(report,encoding=&#x27;utf-8&#x27;);return manifest
+ # 失败时写 failure.json 并重新抛出异常；保留日志供定位，不能把半成品视为成功。
+ except Exception as exc:
+  (root/&#x27;failure.json&#x27;).write_text(json.dumps({&#x27;status&#x27;:&#x27;failed&#x27;,&#x27;error&#x27;:str(exc)},ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;);raise
+</code></pre></details><details id="src7"><summary>ffd/src/canopy_ffd_tool/backend/_generate.py</summary><p class="note">FFD 核心：分区、边缘权重、控制点、最大位移归一化和导出。</p><pre><code># FFD 几何后端。所有输入坐标、距离、控制点位移及输出原始数据均以 mm 为单位。
+# 输入：运行目录 caseDict + stl_labeled.npz；输出：STL/VTP、位移 NPZ、控制格点与质量记录。
+# 算法为 Bernstein 张量积位移场乘边缘过渡权重，仅变形已标记舱盖，不计算流场。
+from pathlib import Path
+import numpy as np, json, hashlib
+from scipy.sparse import csr_matrix
+from scipy.sparse.csgraph import dijkstra
+from scipy.special import comb
+import pyvista as pv, vtk
+import os
+# 运行根目录由 engine.py 传入；参数来自本次运行的 caseDict，避免另藏一套方案。
+ROOT=Path(os.environ[&#x27;FFD_RUN_ROOT&#x27;])
+cfg=json.loads((ROOT/&#x27;0-caseDict/caseDict&#x27;).read_text(encoding=&#x27;utf-8-sig&#x27;))
+d=np.load(ROOT/&#x27;A-geo/stl_labeled.npz&#x27;); v=d[&#x27;v&#x27;].astype(np.float64); f=d[&#x27;f&#x27;]; cellmask=np.isin(d[&#x27;face_id&#x27;],cfg[&#x27;geometry&#x27;][&#x27;canopyCADFaceIndicesZeroBased&#x27;])
+# canopy 为属于舱盖三角形的顶点；outside 为其他机身三角形使用的顶点。
+# 两者共有的接缝顶点必须固定，防止舱盖边界与机身脱开。
+canopy=np.zeros(len(v),bool);canopy[np.unique(f[cellmask])]=True
+outside=np.zeros(len(v),bool);outside[np.unique(f[~cellmask])]=True
+boundary=canopy &amp; outside
+# 舱盖子网格中只出现一次的边构成分区边缘；通过 VTK 定位最近边线。
+edges=np.sort(np.concatenate([f[cellmask][:,[0,1]],f[cellmask][:,[1,2]],f[cellmask][:,[2,0]]]),axis=1)
+edgeunique,counts=np.unique(edges,axis=0,return_counts=True);rim=edgeunique[counts==1]
+line=pv.PolyData(v,lines=np.c_[np.full(len(rim),2),rim].ravel())
+locator=vtk.vtkStaticCellLocator();locator.SetDataSet(line);locator.BuildLocator()
+dist=np.zeros(len(v));cp=[0.,0.,0.];ci=vtk.mutable(0);sub=vtk.mutable(0);d2=vtk.mutable(0.)
+# dist 是顶点到舱盖边缘线段的三维欧氏距离，单位 mm；不是沿曲面的测地距离。
+for idx in np.flatnonzero(canopy):
+ locator.FindClosestPoint(v[idx],cp,ci,sub,d2);dist[idx]=np.sqrt(float(d2))
+# 边缘 fixedCollarMm 内完全固定；至 blendDistanceMm 之间渐变，再往内权重为 1。
+par=cfg[&#x27;geometry&#x27;][&#x27;ffd&#x27;];r=np.clip((dist-par[&#x27;fixedCollarMm&#x27;])/(par[&#x27;blendDistanceMm&#x27;]-par[&#x27;fixedCollarMm&#x27;]),0,1)
+r[~canopy|outside]=0
+# 五次 smoothstep：6r^5−15r^4+10r^3，两端一、二阶导数为零。
+# 这使过渡权重平缓，但不等于对三角网格或重建 CAD 曲率给出了连续性保证。
+blend=r*r*r*(10+r*(-15+6*r))
+# q 将控制盒中的坐标映射到 [0,1]；盒外分量被截断，边界固定仍由 blend 掩膜实现。
+lo=np.array(par[&#x27;boxMin&#x27;]);hi=np.array(par[&#x27;boxMax&#x27;]);q=np.clip((v-lo)/(hi-lo),0,1)
+# 每个方向计算 Bernstein 基函数；三方向张量积把控制格点位移插值到模型顶点。
+bs=[np.array([comb(n-1,i)*q[:,j]**i*(1-q[:,j])**(n-1-i) for i in range(n)]).T for j,n in enumerate(par[&#x27;latticeShape&#x27;])]
+active=blend&gt;0
+basecross=np.cross(v[f[:,1]]-v[f[:,0]],v[f[:,2]]-v[f[:,0]])
+basearea=np.linalg.norm(basecross,axis=1)/2
+outdir=ROOT/&#x27;A-geo/models&#x27;;outdir.mkdir(exist_ok=True)
+res=[];all_disp=[];controls=[]
+# 每个方案独立从同一基准网格出发，避免把前一组变形累计到后一组。
+for variant in cfg[&#x27;geometry&#x27;][&#x27;variants&#x27;]:
+ # ctrl[i,j,k] 保存控制点的 XYZ 位移；X 位移固定为零，当前只改变宽度 Y 与高度 Z。
+ # 仅轴向 i=2..4、横向 j=1..3 的格点可动，三层 k 使用相同形状；最多 27 个非零点。
+ ctrl=np.zeros(tuple(par[&#x27;latticeShape&#x27;])+(3,));mode=variant[&#x27;mode&#x27;]
+ for i in range(2,5):
+  for j in range(1,4):
+   for k in range(3):
+    z=1.; y=0.
+    if mode==&#x27;lower&#x27;:z=-1.
+    if mode in [&#x27;widen&#x27;,&#x27;narrow&#x27;]:z=0.;y=(j-2)*(1 if mode==&#x27;widen&#x27; else -1)
+    # front/rear 用轴向不同权重把隆起偏向前段/后段；这些是外形模式，并非气动优化结论。
+    if mode==&#x27;front&#x27;:z=[0,2,1.5,.5,0,0,0][i]
+    if mode==&#x27;rear&#x27;:z=[0,0,0,.5,1.5,2,0][i]
+    if mode==&#x27;combined&#x27;:y=.8*(j-2)
+    ctrl[i,j,k]=[0,y,z]
+ # raw 为未经幅值归一化的全顶点位移；乘 blend 后，舱盖外及边缘缓冲带严格为零。
+ raw=np.einsum(&#x27;ni,nj,nk,ijkc-&gt;nc&#x27;,*bs,ctrl,optimize=True)*blend[:,None]
+ # 按全模型最大位移向量长度缩放，使实际最大位移等于 targetMaxMm。
+ # targetMaxMm 控制几何幅度；增大它不会自动满足曲率、间隙或气动性能约束。
+ scale=variant[&#x27;targetMaxMm&#x27;]/np.linalg.norm(raw,axis=1).max();ctrl*=scale;disp=raw*scale
+ nv=v+disp
+ # 面积和法向对比用于识别零面积三角形与相对原法向翻转；随后还要检查自交。
+ cross=np.cross(nv[f[:,1]]-nv[f[:,0]],nv[f[:,2]]-nv[f[:,0]]);area=np.linalg.norm(cross,axis=1)/2
+ cos=np.einsum(&#x27;ij,ij-&gt;i&#x27;,cross,basecross)/(4*basearea*area)
+ # 固定区域坐标必须逐点完全一致；这些 assert 是几何检查，不代表 CFD 收敛。
+ assert np.array_equal(nv[~active],v[~active])
+ assert np.all(area&gt;0) and np.all(cos&gt;0)
+ mesh=pv.PolyData(nv,np.c_[np.full(len(f),3),f].ravel())
+ path=outdir/(&#x27;canopy_ffd_&#x27;+variant[&#x27;id&#x27;]+&#x27;.stl&#x27;);mesh.save(path,binary=True)
+ # Binary STL reread: exact triangle order, original coordinates roundtrip unchanged outside moving region.
+ # STL 顶点以 float32 存储；重读检查固定区及量化误差，避免只检查内存中的 float64 几何。
+ rec=np.fromfile(path,dtype=np.dtype([(&#x27;n&#x27;,&#x27;&lt;f4&#x27;,(3,)),(&#x27;v&#x27;,&#x27;&lt;f4&#x27;,(3,3)),(&#x27;a&#x27;,&#x27;&lt;u2&#x27;)]),offset=84)[&#x27;v&#x27;].astype(float)
+ fixed_tri=~active[f]
+ assert np.array_equal(rec[fixed_tri],v[f][fixed_tri])
+ quant_error=float(np.abs(rec-nv[f]).max())
+ # VTP 保留位移大小、位移向量和权重字段，便于后处理查看；STL 只保留表面三角形。
+ mesh.point_data[&#x27;displacement_mm&#x27;]=np.linalg.norm(disp,axis=1);mesh.point_data[&#x27;displacement_vector_mm&#x27;]=disp;mesh.point_data[&#x27;canopy_blend&#x27;]=blend
+ mesh.save(outdir/(&#x27;canopy_ffd_&#x27;+variant[&#x27;id&#x27;]+&#x27;.vtp&#x27;))
+ entry={**variant,&#x27;actualMaxMm&#x27;:float(np.linalg.norm(disp,axis=1).max()),&#x27;movedVertices&#x27;:int(active.sum()),&#x27;fixedOutsideMaxMm&#x27;:float(np.linalg.norm(disp[outside],axis=1).max()),&#x27;minAreaRatio&#x27;:float((area/basearea).min()),&#x27;maxAreaRatio&#x27;:float((area/basearea).max()),&#x27;minNormalCosine&#x27;:float(cos.min()),&#x27;maxSTLRoundtripErrorMm&#x27;:quant_error,&#x27;triangles&#x27;:len(f),&#x27;zeroAreaTriangles&#x27;:int(sum(area==0)),&#x27;file&#x27;:str(path.relative_to(ROOT))}
+ res.append(entry);all_disp.append(disp);controls.append(ctrl)
+ print(variant[&#x27;id&#x27;],variant[&#x27;mode&#x27;],entry[&#x27;actualMaxMm&#x27;],entry[&#x27;minAreaRatio&#x27;],entry[&#x27;minNormalCosine&#x27;],flush=True)
+# NPZ 保存未量化的基准、各方案位移及控制点，供单位转换、复查和下游 CFD 准备读取。
+np.savez_compressed(ROOT/&#x27;A-geo/ffd_data.npz&#x27;,v=v,f=f,displacements=np.array(all_disp),blend=blend,canopy_cells=cellmask,boundary=boundary,controls=controls)
+(ROOT/&#x27;A-geo/validation.json&#x27;).write_text(json.dumps(res,ensure_ascii=False,indent=2))
+(ROOT/&#x27;A-geo/control_lattices.json&#x27;).write_text(json.dumps({&#x27;boxMin&#x27;:lo.tolist(),&#x27;boxMax&#x27;:hi.tolist(),&#x27;shape&#x27;:par[&#x27;latticeShape&#x27;],&#x27;displacements_mm&#x27;:[c.tolist() for c in controls]},indent=2))
+cfg[&#x27;status&#x27;]=&#x27;models_generated_quality_checked_intersection_check_pending&#x27;
+cfg[&#x27;provenance&#x27;][&#x27;labeledBaselineSHA256&#x27;]=hashlib.sha256((ROOT/&#x27;A-geo/stl_labeled.npz&#x27;).read_bytes()).hexdigest()
+(ROOT/&#x27;0-caseDict/caseDict&#x27;).write_text(json.dumps(cfg,ensure_ascii=False,indent=2))
+print(&#x27;active&#x27;,active.sum(),&#x27;boundary&#x27;,boundary.sum(),&#x27;max_boundary_distance&#x27;,np.max(dist[canopy]))
+
+</code></pre></details><details id="src8"><summary>ffd/src/canopy_ffd_tool/backend/_intersections.py</summary><p class="note">检查变动三角形相关的交叉与闭合拓扑。</p><pre><code># 变形后自交检查：只检查至少涉及一个移动三角形的非邻接三角形对。
+# 输入为 _generate.py 生成的 ffd_data.npz；结果追加写入 validation.json 和 topology_validation.json。
+# 这里检查几何，不计算空气动力或结构性能，也不是无自交的数学证明。
+from pathlib import Path
+import numpy as np, pyvista as pv, vtk, json
+import os
+R=Path(os.environ[&#x27;FFD_RUN_ROOT&#x27;]);d=np.load(R/&#x27;A-geo/ffd_data.npz&#x27;);v=d[&#x27;v&#x27;];f=d[&#x27;f&#x27;];disp=d[&#x27;displacements&#x27;];changed=np.any(d[&#x27;blend&#x27;][f]&gt;0,axis=1);changedids=np.flatnonzero(changed)
+res=json.loads((R/&#x27;A-geo/validation.json&#x27;).read_text());basepairs=set()
+# 每组方案独立建立空间索引；先用包围盒筛选，再做 VTK 三角形相交判断。
+for k,delta in enumerate(disp):
+ # Check exported float32 coordinates, not only double-precision in-memory geometry.
+ # 按 STL 导出的 float32 精度测试，覆盖导出量化带来的几何影响。
+ nv=(v+delta).astype(np.float32).astype(float);tri=nv[f];low=tri.min(1);high=tri.max(1)
+ mesh=pv.PolyData(nv,np.c_[np.full(len(f),3),f].ravel());loc=vtk.vtkStaticCellLocator();loc.SetDataSet(mesh);loc.BuildLocator()
+ lst=vtk.vtkIdList();new=[];old=[];tested=0
+ # unchanged-unchanged 对不受本次变形影响，因此不重复扫描；同一移动对也避免重复计数。
+ for i in changedids:
+  # AABB 是轴向包围盒，只负责快速排除不可能接触的候选，不能单独判定三角形相交。
+  b=np.c_[low[i],high[i]].ravel();loc.FindCellsWithinBounds(b,lst)
+  js=np.array([lst.GetId(a) for a in range(lst.GetNumberOfIds())],int)
+  js=js[(js!=i)&amp;((js&gt;i)|(~changed[js]))]
+  js=js[np.all(high[js]&gt;=low[i],axis=1)&amp;np.all(low[js]&lt;=high[i],axis=1)]
+  # 排除共享任一顶点的相邻三角形，避免把正常网格连接当成自交。
+  # 相邻面风险还需结合前一阶段面积/法向检查；这里不穷举所有局部折叠。
+  js=js[~np.any(f[js,:,None]==f[i][None,None,:],axis=(1,2))]
+  for j in js:
+   tested+=1
+   if vtk.vtkTriangle.TrianglesIntersect(*tri[i],*tri[j]):
+    pair=tuple(sorted([int(i),int(j)]))
+    # 将基准网格本来存在的相交与新增相交分开；仅新增项影响 engine.py 的接受判断。
+    if pair in basepairs or vtk.vtkTriangle.TrianglesIntersect(*v[f[i]],*v[f[j]]):basepairs.add(pair);old.append(pair)
+    else:new.append(pair)
+ # 保存检查对数及至多 20 对新增交叉示例，便于失败后定位对应三角形编号。
+ res[k][&#x27;nonadjacentTrianglePairsTested&#x27;]=tested;res[k][&#x27;newIntersectingTrianglePairs&#x27;]=len(new);res[k][&#x27;preexistingIntersectingPairsInCandidateRegion&#x27;]=len(old);res[k][&#x27;newIntersectionExamples&#x27;]=new[:20]
+ print(k+1,&#x27;tested&#x27;,tested,&#x27;new&#x27;,len(new),&#x27;preexisting&#x27;,len(old),flush=True)
+ (R/&#x27;A-geo/validation.json&#x27;).write_text(json.dumps(res,ensure_ascii=False,indent=2))
+# Closed edge topology is invariant because connectivity and distinct vertices are retained.
+# 连接关系未改变，边拓扑计数保持不变；它与上面的空间自交是两类独立检查。
+edges=np.sort(np.concatenate([f[:,[0,1]],f[:,[1,2]],f[:,[2,0]]]),axis=1);_,cnt=np.unique(edges,axis=0,return_counts=True)
+summary={&#x27;boundaryEdges&#x27;:int(sum(cnt==1)),&#x27;nonmanifoldEdges&#x27;:int(sum(cnt&gt;2)),&#x27;triangles&#x27;:len(f),&#x27;vertices&#x27;:len(v),&#x27;canopyMovedVertices&#x27;:int(sum(d[&#x27;blend&#x27;]&gt;0)),&#x27;intersectionMethod&#x27;:&#x27;VTK triangle-triangle intersection; all AABB candidates involving moved triangles; excludes pairs sharing a vertex; compares with source mesh; tests exported float32 coordinates&#x27;,&#x27;limitations&#x27;:&#x27;Adjacent triangle folding assessed by area/normal checks, not a formal proof of embedding; no CFD or structural validation.&#x27;}
+(R/&#x27;A-geo/topology_validation.json&#x27;).write_text(json.dumps(summary,indent=2))
+</code></pre></details><details id="src9"><summary>prepare_from_ffd.py</summary><p class="note">毫米转米，按 caseDict 生成 STAR 几何与 solver.properties。</p><pre><code>&quot;&quot;&quot;Prepare SI CFD inputs from a completed FFD run; never run a solver.&quot;&quot;&quot;
+# FFD→STAR 文件接口：读取已检查的毫米数据，导出米制 STL 和宏参数。
+# 本脚本只准备输入，不启动 STAR；物理/数值参数统一读取 CFD 的 caseDict。
+from pathlib import Path
+import argparse, hashlib, json, os, re, struct
+import numpy as np
+
+def prepare(ffd_run, cfd_root):
+    # source 是一次 FFD 的结果根目录；root 是含有 CFD 模板 caseDict 的新目录。
+    source=Path(ffd_run).resolve(); root=Path(cfd_root).resolve()
+    cfgpath=root/&#x27;0-caseDict/caseDict&#x27;
+    cfg=json.loads(cfgpath.read_text(encoding=&#x27;utf-8-sig&#x27;))
+    manifest=json.loads((source/&#x27;run_manifest.json&#x27;).read_text(encoding=&#x27;utf-8&#x27;))
+    fcfg=json.loads((source/&#x27;0-caseDict/caseDict&#x27;).read_text(encoding=&#x27;utf-8&#x27;))
+    # 几何验收状态来自 FFD 清单；仅有 STL 文件不代表交叉检查已通过。
+    if manifest[&#x27;status&#x27;]!=&#x27;completed&#x27; or not manifest[&#x27;intersectionsChecked&#x27;]:
+        raise ValueError(&#x27;A completed FFD run with intersection checks is required.&#x27;)
+    if manifest[&#x27;rawDataUnits&#x27;]!=&#x27;mm&#x27; or cfg[&#x27;units&#x27;]!=&#x27;SI&#x27;:raise ValueError(&#x27;Expected FFD mm and CFD SI units.&#x27;)
+    # 当前三个 Java 宏只适配 +X、0°；不能只改迎角数值就沿用同一套边界设置。
+    if cfg[&#x27;flow&#x27;][&#x27;direction&#x27;]!=[1,0,0] or cfg[&#x27;flow&#x27;][&#x27;aoa&#x27;]!=0:
+        raise ValueError(&#x27;Bundled macros support +X flow and AoA=0 only.&#x27;)
+    variants=fcfg[&#x27;geometry&#x27;][&#x27;variants&#x27;]; ids=[x[&#x27;id&#x27;] for x in variants]
+    if not all(re.fullmatch(r&#x27;\d{2}&#x27;,x) and 1&lt;=int(x)&lt;=10 for x in ids):
+        raise ValueError(&#x27;Bundled CFD runner supports variant IDs 01..10.&#x27;)
+    if ids!=[x[&#x27;id&#x27;] for x in manifest[&#x27;variants&#x27;]]:raise ValueError(&#x27;FFD configuration and manifest disagree.&#x27;)
+    # v: N×3 基线顶点；f: M×3 三角形顶点索引；ds: K×N×3 个方案的节点位移。
+    # 原始 NPZ 始终是毫米；接口不读取可能另选导出单位的 FFD STL。
+    data=np.load(source/&#x27;A-geo/ffd_data.npz&#x27;,allow_pickle=False)
+    v=data[&#x27;v&#x27;];f=data[&#x27;f&#x27;];ds=data[&#x27;displacements&#x27;]
+    if ds.shape!=(len(ids),len(v),3):raise ValueError(&#x27;FFD array shape does not match selected variants.&#x27;)
+    if not np.isfinite(v).all() or not np.isfinite(ds).all():raise ValueError(&#x27;Nonfinite geometry.&#x27;)
+    names=[&#x27;baseline&#x27;]+[&#x27;variant_&#x27;+x for x in ids]
+    # 保留真实方案号，例如只选 05、09 时仍导出 variant_05、variant_09。
+    targets=[root/&#x27;A-geo&#x27;/(x+&#x27;.stl&#x27;) for x in names]+[root/&#x27;A-geo/farfield.stl&#x27;,root/&#x27;0-caseDict/solver.properties&#x27;]
+    if any(p.exists() for p in targets):raise FileExistsError(&#x27;Prepared files already exist; use a fresh CFD project.&#x27;)
+    # 已有目标时拒绝覆盖；调整参数或重新生成时，换一个新 CFD 项目目录。
+    root.joinpath(&#x27;A-geo&#x27;).mkdir(exist_ok=True,parents=True)
+    for k,name in enumerate(names):
+        # 基线位移为 0；其他方案加上 ds。只在这一处乘 0.001 完成 mm→m。
+        points=(v+(ds[k-1] if k else 0))*.001
+        t=points[f]; n=np.cross(t[:,1]-t[:,0],t[:,2]-t[:,0]); norms=np.linalg.norm(n,axis=1)
+        if np.any(norms&lt;=0):raise ValueError(&#x27;Degenerate triangle: &#x27;+name)
+        a=np.zeros(len(f),dtype=[(&#x27;n&#x27;,&#x27;&lt;f4&#x27;,(3,)),(&#x27;v&#x27;,&#x27;&lt;f4&#x27;,(3,3)),(&#x27;a&#x27;,&#x27;&lt;u2&#x27;)]);a[&#x27;n&#x27;]=n/norms[:,None];a[&#x27;v&#x27;]=t
+        # STL 不携带可靠单位元数据；这里已写成米，Java 宏也必须按 m 导入。
+        with (root/&#x27;A-geo&#x27;/(name+&#x27;.stl&#x27;)).open(&#x27;xb&#x27;) as out:
+            out.write(b&#x27;canopy CFD input metres&#x27;.ljust(80,b&#x27; &#x27;)+struct.pack(&#x27;&lt;I&#x27;,len(f)));out.write(a.tobytes())
+    x0,y0,z0=cfg[&#x27;domain&#x27;][&#x27;min&#x27;];x1,y1,z1=cfg[&#x27;domain&#x27;][&#x27;max&#x27;]
+    # 远场边界坐标已在 CFD caseDict 中按米给定，这部分不再乘 0.001。
+    if not np.all(np.array([x1,y1,z1])&gt;np.array([x0,y0,z0])):raise ValueError(&#x27;Invalid domain.&#x27;)
+    p=np.array([[x0,y0,z0],[x1,y0,z0],[x1,y1,z0],[x0,y1,z0],[x0,y0,z1],[x1,y0,z1],[x1,y1,z1],[x0,y1,z1]],float)
+    patches={&#x27;inlet&#x27;:[(0,4,7),(0,7,3)],&#x27;outlet&#x27;:[(1,2,6),(1,6,5)],&#x27;side_ymin&#x27;:[(0,1,5),(0,5,4)],&#x27;side_ymax&#x27;:[(3,7,6),(3,6,2)],&#x27;side_zmin&#x27;:[(0,3,2),(0,2,1)],&#x27;side_zmax&#x27;:[(4,5,6),(4,6,7)]}
+    # solid 名称参与 Java 边界识别：inlet / outlet / side_*，应与宏一起维护。
+    with (root/&#x27;A-geo/farfield.stl&#x27;).open(&#x27;x&#x27;) as out:
+        for name,faces in patches.items():
+            out.write(&#x27;solid &#x27;+name+&#x27;\n&#x27;)
+            for face in faces:
+                t=p[list(face)];n=np.cross(t[1]-t[0],t[2]-t[0]);n/=np.linalg.norm(n)
+                out.write(&#x27;facet normal &#x27;+&#x27; &#x27;.join(map(str,n))+&#x27;\nouter loop\n&#x27;)
+                for pt in t:out.write(&#x27;vertex &#x27;+&#x27; &#x27;.join(map(str,pt))+&#x27;\n&#x27;)
+                out.write(&#x27;endloop\nendfacet\n&#x27;)
+            out.write(&#x27;endsolid &#x27;+name+&#x27;\n&#x27;)
+    props={}
+    # solver.properties 是 caseDict 的派生文件；请改 caseDict 后重新准备输入，
+    # 不要单独手改 properties，形成两套互相矛盾的工况与网格参数。
+    for key in [&#x27;sampleEvery&#x27;,&#x27;convergenceWindow&#x27;,&#x27;minimumIterations&#x27;,&#x27;relativeDragDrift&#x27;,&#x27;relativeDragRange&#x27;,&#x27;relativeMassImbalance&#x27;,&#x27;maximumNormalizedResidual&#x27;,&#x27;maxIterations&#x27;]:props[key]=cfg[&#x27;solver&#x27;][key]
+    props.update(referencePressure=cfg[&#x27;air&#x27;][&#x27;p&#x27;],rho=cfg[&#x27;air&#x27;][&#x27;rho&#x27;],mu=cfg[&#x27;air&#x27;][&#x27;mu&#x27;],speed=cfg[&#x27;flow&#x27;][&#x27;speed&#x27;],baseSize=cfg[&#x27;mesh&#x27;][&#x27;base&#x27;],bodySize=cfg[&#x27;mesh&#x27;][&#x27;bodySize&#x27;],bodyMin=cfg[&#x27;mesh&#x27;][&#x27;bodyMin&#x27;],layers=cfg[&#x27;mesh&#x27;][&#x27;layers&#x27;],prismThickness=cfg[&#x27;mesh&#x27;][&#x27;prismThickness&#x27;],prismStretch=cfg[&#x27;mesh&#x27;][&#x27;prismStretch&#x27;],intensity=cfg[&#x27;flow&#x27;][&#x27;turbulenceIntensity&#x27;],viscosityRatio=cfg[&#x27;flow&#x27;][&#x27;viscosityRatio&#x27;])
+    (root/&#x27;0-caseDict/solver.properties&#x27;).write_text(&#x27;\n&#x27;.join(f&#x27;{k}={val}&#x27; for k,val in props.items()),encoding=&#x27;utf-8&#x27;)
+    cfg[&#x27;source&#x27;]=os.path.relpath(source/&#x27;A-geo/ffd_data.npz&#x27;,root).replace(os.sep,&#x27;/&#x27;)
+    # 写回来源哈希、真实方案列表与阶段状态。inputs_prepared_not_solved 表示尚未求解。
+    cfg[&#x27;variants&#x27;]=variants;cfg[&#x27;status&#x27;]=&#x27;inputs_prepared_not_solved&#x27;
+    cfg.setdefault(&#x27;provenance&#x27;,{})[&#x27;ffdInputSHA256&#x27;]=hashlib.sha256((source/&#x27;A-geo/ffd_data.npz&#x27;).read_bytes()).hexdigest()
+    cfg[&#x27;provenance&#x27;][&#x27;ffdRun&#x27;]=str(source)
+    cfgpath.write_text(json.dumps(cfg,ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;)
+    result={&#x27;status&#x27;:&#x27;inputs_prepared_not_solved&#x27;,&#x27;cases&#x27;:names,&#x27;lengthUnits&#x27;:&#x27;m&#x27;,&#x27;files&#x27;:{str(p.relative_to(root)):{&#x27;bytes&#x27;:p.stat().st_size,&#x27;sha256&#x27;:hashlib.sha256(p.read_bytes()).hexdigest()} for p in targets}}
+    # 准备清单记录每个输入文件的字节数和哈希，便于复现与交接追踪。
+    (root/&#x27;A-geo/preparation_manifest.json&#x27;).write_text(json.dumps(result,indent=2),encoding=&#x27;utf-8&#x27;)
+    return result
+
+if __name__==&#x27;__main__&#x27;:
+    # 命令行仅接收 FFD 结果目录与 CFD 项目目录；其余参数均由各自配置提供。
+    p=argparse.ArgumentParser(description=__doc__);p.add_argument(&#x27;--ffd-run&#x27;,type=Path,required=True);p.add_argument(&#x27;--cfd-root&#x27;,type=Path,required=True);a=p.parse_args()
+    print(json.dumps(prepare(a.ffd_run,a.cfd_root),ensure_ascii=False,indent=2))
+</code></pre></details><details id="src10"><summary>cfd/UDF/run_fresh_batch.py</summary><p class="note">按算例启动 STAR，保存日志和批次状态。</p><pre><code>&quot;&quot;&quot;Fresh baseline + variants. Use --dry-run to inspect commands without solving.&quot;&quot;&quot;
+# 用途：在 Windows 上按顺序运行基线和各变形方案；本文件负责调度，物理参数来自 caseDict。
+# 三个 Java 宏依次完成建模/网格、物理设置/初算、续算/收敛检查，不依赖 VibeFlow 进程。
+from pathlib import Path
+import argparse,datetime,json,os,re,subprocess,threading,sys
+if hasattr(sys.stdout,&#x27;reconfigure&#x27;):sys.stdout.reconfigure(encoding=&#x27;utf-8&#x27;)
+# 默认启动文件可由 STARCCM_BIN 环境变量或 --star 参数覆盖；这里需要实际 .bat 文件路径。
+DEFAULT_STAR=r&#x27;starccm+.bat&#x27;
+# baseline 是原始机身；variant_01 至 variant_10 对应 FFD 导出的方案编号。
+NAMES=[&#x27;baseline&#x27;]+[f&#x27;variant_{i:02d}&#x27; for i in range(1,11)]
+def plans(root,star,names,cfg):
+ # 宏顺序不可交换：后一个宏复用前一个宏在同一仿真中创建的对象。
+ macros=&#x27;,&#x27;.join(str(root/&#x27;UDF&#x27;/f) for f in [&#x27;BuildCanopy.java&#x27;,&#x27;SolveCanopy.java&#x27;,&#x27;AdvanceCanopy.java&#x27;])
+ for name in names:
+  # -new 为每个方案建立独立仿真；-np 使用配置中的进程数，-batch 无需手工操作界面。
+  args=[str(star),&#x27;-new&#x27;,&#x27;-np&#x27;,str(cfg[&#x27;solver&#x27;][&#x27;processes&#x27;]),&#x27;-notokens&#x27;,&#x27;-noretry&#x27;,&#x27;-locale&#x27;,&#x27;en:US&#x27;,&#x27;-batch&#x27;,macros]
+  yield name,args
+
+def main():
+ ap=argparse.ArgumentParser(description=__doc__)
+ ap.add_argument(&#x27;--root&#x27;,type=Path,default=Path(__file__).resolve().parents[1])
+ ap.add_argument(&#x27;--star&#x27;,type=Path,default=Path(os.environ.get(&#x27;STARCCM_BIN&#x27;,DEFAULT_STAR)))
+ ap.add_argument(&#x27;--cases&#x27;,nargs=&#x27;+&#x27;,choices=NAMES,default=NAMES)
+ ap.add_argument(&#x27;--dry-run&#x27;,action=&#x27;store_true&#x27;)
+ # 路径以脚本所在项目为默认根目录；caseDict 是流动、资源和停止条件的参数来源。
+ a=ap.parse_args();root=a.root.resolve();cfg=json.loads((root/&#x27;0-caseDict/caseDict&#x27;).read_text(encoding=&#x27;utf-8-sig&#x27;))
+ # 当前宏的边界方向写为 +X，只支持已经确认的 0° 迎角，避免换工况后静默误算。
+ if cfg[&#x27;flow&#x27;][&#x27;direction&#x27;]!=[1,0,0] or cfg[&#x27;flow&#x27;][&#x27;aoa&#x27;]!=0:raise SystemExit(&#x27;These release-matched macros support the confirmed +X / AoA=0 setup only.&#x27;)
+ # solver.properties 是前处理从 caseDict 派生的 Java 可读参数；几何必须先完成毫米到米转换。
+ if not (root/&#x27;0-caseDict/solver.properties&#x27;).exists():raise SystemExit(&#x27;Run UDF/prepare.py first.&#x27;)
+ for name in a.cases:
+  if not (root/&#x27;A-geo&#x27;/f&#x27;{name}.stl&#x27;).exists():raise SystemExit(&#x27;Missing geometry: &#x27;+name)
+ for f in [&#x27;BuildCanopy.java&#x27;,&#x27;SolveCanopy.java&#x27;,&#x27;AdvanceCanopy.java&#x27;]:
+  if not (root/&#x27;UDF&#x27;/f).exists():raise SystemExit(&#x27;Missing macro: &#x27;+f)
+ jobs=list(plans(root,a.star,a.cases,cfg))
+ # --dry-run 仅打印将执行的命令，不启动 STAR-CCM+，也不占用求解许可证。
+ if a.dry_run:
+  for name,args in jobs:print(name+&#x27; | VF_CANOPY_CASE=&#x27;+name+&#x27; | VF_CANOPY_ROOT=&#x27;+root.as_posix()+&#x27;\n&#x27;+subprocess.list2cmdline(args)+&#x27;\n&#x27;)
+  return
+ # 该启动器调用 Windows .bat；WSL 可承担几何与后处理，不能直接走这里的 Windows 启动分支。
+ if os.name!=&#x27;nt&#x27;:raise SystemExit(&#x27;Launch STAR-CCM+ from Windows; WSL is used only for geometry/postprocessing.&#x27;)
+ if not a.star.is_file():raise SystemExit(&#x27;STAR-CCM+ executable not found; pass --star.&#x27;)
+ # 先检查全部输出目录；已有但未完整结束的结果会阻止启动，避免覆盖断点和日志。
+ # Validate all targets before starting any calculation. Never overwrite incomplete runs.
+ for name,args in jobs:
+  folder=root/&#x27;C-run&#x27;/name
+  if folder.exists() and any(folder.iterdir()) and not ((folder/&#x27;convergence.json&#x27;).exists() and (folder/&#x27;final_result.sim&#x27;).exists()):
+   raise SystemExit(&#x27;Existing incomplete output: &#x27;+str(folder)+&#x27;; preserve it and choose a fresh reproduction folder.&#x27;)
+ (root/&#x27;D-post&#x27;).mkdir(exist_ok=True);(root/&#x27;C-run&#x27;).mkdir(exist_ok=True)
+ # batch_status.json 记录整批进度；它不是物理收敛的替代证据。
+ status={&#x27;started&#x27;:datetime.datetime.now().astimezone().isoformat(),&#x27;state&#x27;:&#x27;running&#x27;,&#x27;completed&#x27;:[],&#x27;failures&#x27;:[]}
+ def save(): (root/&#x27;D-post/batch_status.json&#x27;).write_text(json.dumps(status,ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;)
+ # 外层循环逐个方案串行执行；每个方案内部由 STAR 的 -np 控制并行进程。
+ for name,args in jobs:
+  folder=root/&#x27;C-run&#x27;/name;folder.mkdir(exist_ok=True)
+  # 两个完成文件已存在就跳过；converged=false 的已完成算例也会跳过，应另建目录重算。
+  if (folder/&#x27;convergence.json&#x27;).exists() and (folder/&#x27;final_result.sim&#x27;).exists():
+   outcome=json.loads((folder/&#x27;convergence.json&#x27;).read_text());status[&#x27;completed&#x27;].append({&#x27;case&#x27;:name,**outcome});print(&#x27;SKIP completed&#x27;,name);save();continue
+  status[&#x27;current&#x27;]=name;save()
+  # 环境变量把当前根目录、方案名、初算步数传给 Java 宏，不把这些路径硬编码在宏里。
+  env=os.environ.copy();env.update(VF_CANOPY_ROOT=root.as_posix(),VF_CANOPY_CASE=name,VF_CANOPY_ITERATIONS=str(cfg[&#x27;solver&#x27;][&#x27;initializationIterations&#x27;]))
+  print(&#x27;START&#x27;,name,flush=True)
+  process=subprocess.Popen(subprocess.list2cmdline(args),shell=True,env=env,cwd=root,stdout=subprocess.PIPE,stderr=subprocess.STDOUT,creationflags=subprocess.CREATE_NO_WINDOW)
+  status[&#x27;launcherPID&#x27;]=process.pid;save()
+  # 超时关闭该方案的启动进程树，保留输出文件供排错；不会自动清空目录再重试。
+  def stop_on_timeout():
+   if process.poll() is None:subprocess.run([&#x27;taskkill&#x27;,&#x27;/PID&#x27;,str(process.pid),&#x27;/T&#x27;,&#x27;/F&#x27;],capture_output=True,creationflags=subprocess.CREATE_NO_WINDOW)
+  timer=threading.Timer(cfg[&#x27;solver&#x27;][&#x27;timeoutPerCase_s&#x27;],stop_on_timeout);timer.start()
+  try:
+   # 将软件标准输出持续写入 batch.log；许可证/服务器定位信息在共享日志中隐藏。
+   with (folder/&#x27;batch.log&#x27;).open(&#x27;w&#x27;,encoding=&#x27;utf-8&#x27;) as out:
+    for raw in iter(process.stdout.readline,b&#x27;&#x27;):
+     line=raw.decode(&#x27;utf-8&#x27;,errors=&#x27;replace&#x27;)
+     if re.search(r&#x27;license|licence|Server::start&#x27;,line,re.I):line=&#x27;[license/server location redacted]\n&#x27;
+     out.write(line);out.flush()
+   rc=process.wait()
+  except BaseException:
+   stop_on_timeout()
+   raise
+  finally:timer.cancel()
+  # 进程正常退出、结果文件齐全和宏完成标记同时满足，才视为执行完成。
+  # 这里的 good 只判断流程结束；真正收敛与否仍看 convergence.json。
+  good=rc==0 and (folder/&#x27;convergence.json&#x27;).exists() and (folder/&#x27;final_result.sim&#x27;).exists() and &#x27;VF_STAGE=CASE_COMPLETE&#x27; in (folder/&#x27;batch.log&#x27;).read_text(encoding=&#x27;utf-8&#x27;)
+  if not good:
+   status[&#x27;failures&#x27;].append({&#x27;case&#x27;:name,&#x27;exitCode&#x27;:rc});status[&#x27;state&#x27;]=&#x27;failed&#x27;;save();raise SystemExit(&#x27;FAILED &#x27;+name+&#x27;; inspect its batch.log&#x27;)
+  outcome=json.loads((folder/&#x27;convergence.json&#x27;).read_text());status[&#x27;completed&#x27;].append({&#x27;case&#x27;:name,**outcome});save();print(&#x27;DONE&#x27;,name,outcome,flush=True)
+ # 即使全部进程正常结束，也可能存在未达到收敛判据的方案；状态明确区分这两种情况。
+ status[&#x27;state&#x27;]=&#x27;completed&#x27; if all(r[&#x27;converged&#x27;] for r in status[&#x27;completed&#x27;]) else &#x27;completed_with_unconverged_cases&#x27;
+ status[&#x27;finished&#x27;]=datetime.datetime.now().astimezone().isoformat();save();print(&#x27;ALL_REQUESTED_CASES_COMPLETE&#x27;)
+if __name__==&#x27;__main__&#x27;:main()
+</code></pre></details><details id="src11"><summary>cfd/UDF/BuildCanopy.java</summary><p class="note">导入几何、创建流体域、映射边界并建网格。</p><pre><code>// 第一阶段：读取米制 STL，构造外流场，创建边界并生成体网格。
+// 由 run_fresh_batch.py 在新的仿真中调用，后续接 SolveCanopy、AdvanceCanopy。
+import java.util.*;
+import java.io.*;
+import star.common.*;
+import star.base.neo.*;
+import star.meshing.*;
+import star.prismmesher.*;
+public class BuildCanopy extends StarMacro {
+ public void execute() {
+  // 根目录和方案名由启动器传入；每个方案写入各自的 C-run 子目录。
+  Simulation s=getActiveSimulation(); String root=System.getenv(&quot;VF_CANOPY_ROOT&quot;),id=System.getenv(&quot;VF_CANOPY_CASE&quot;);
+  if(root==null||id==null)throw new RuntimeException(&quot;Missing case environment&quot;);
+  // 参数来自 caseDict 派生文件；修改网格尺度应改配置并重新准备，不在宏中另设参数。
+  Properties p=new Properties();try(FileInputStream in=new FileInputStream(root+&quot;/0-caseDict/solver.properties&quot;)){p.load(in);}catch(Exception e){throw new RuntimeException(e);}
+  // CFD 全程用米。FFD 原始模型为毫米，前处理已乘 0.001；此处不能再次缩放。
+  Units m=s.getUnitsManager().getObject(&quot;m&quot;);
+  s.get(PartImportManager.class).importStlPart(root+&quot;/A-geo/&quot;+id+&quot;.stl&quot;,&quot;OneSurfacePerPatch&quot;,m,true,1e-7);
+  // 统一物体名称，避免后续对象引用依赖方案编号。
+  MeshPart body=(MeshPart)s.get(SimulationPartManager.class).getPart(id);body.setPresentationName(&quot;VF_Body&quot;);
+  // farfield 是已命名的外部计算域，包含 inlet、outlet、side_* 面。
+  s.get(PartImportManager.class).importStlPart(root+&quot;/A-geo/farfield.stl&quot;,&quot;OneSurfacePerPatch&quot;,m,true,1e-7);
+  MeshPart box=(MeshPart)s.get(SimulationPartManager.class).getPart(&quot;farfield&quot;);
+  for(PartSurface ps:box.getPartSurfaces())s.println(&quot;VF_BOX_SURFACE=&quot;+ps.getPresentationName());
+  // 外部包围盒减去完整机身，得到空气占据的流体区域；使用导入三角面进行布尔操作。
+  SubtractPartsOperation sub=(SubtractPartsOperation)s.get(MeshOperationManager.class).createSubtractPartsOperation(Arrays.asList(box,body));sub.setPresentationName(&quot;VF_Fluid&quot;);sub.setTargetPart(box);sub.setPerformCADBoolean(false);sub.execute();
+  GeometryPart fluid=sub.getOutputParts().getObjects().iterator().next();
+  // 将布尔输出建立为流体 Region，后续在其中指定空气连续体。
+  Region reg=s.getRegionManager().createEmptyRegion();reg.setPresentationName(&quot;VF_Fluid&quot;);reg.getPartGroup().setObjects(fluid);
+  List&lt;PartSurface&gt; wall=new ArrayList&lt;&gt;();
+  // 按前处理保留的面名映射边界；其余有效表面按机身壁面处理。
+  // 因此不能随意改 farfield 的面名；日志中的 VF_BOUNDARY 可用于核对映射。
+  for(PartSurface ps:fluid.getPartSurfaces()){
+   String n=ps.getPresentationName();Boundary b=reg.getBoundaryManager().createEmptyBoundary(n);b.getPartSurfaceGroup().setObjects(ps);
+   if(n.toLowerCase().contains(&quot;inlet&quot;))b.setBoundaryType(InletBoundary.class);
+   else if(n.toLowerCase().contains(&quot;outlet&quot;))b.setBoundaryType(PressureBoundary.class);
+   else if(n.contains(&quot;side_&quot;))b.setBoundaryType(SymmetryBoundary.class);
+   else {b.setBoundaryType(WallBoundary.class);wall.add(ps);}
+   s.println(&quot;VF_BOUNDARY=&quot;+n+&quot; TYPE=&quot;+b.getBoundaryType().getClass().getName());
+  }
+  // 没有识别到机身壁面意味着导入/布尔/命名有误，立即停止而不是空跑。
+  if(wall.isEmpty())throw new RuntimeException(&quot;No body wall surfaces&quot;);
+  // 自动网格链：表面重构 + 切割体网格 + 棱柱边界层。通过网格检查不等于网格无关。
+  AutoMeshOperation op=s.get(MeshOperationManager.class).createAutoMeshOperation(Arrays.asList(&quot;star.resurfacer.ResurfacerAutoMesher&quot;,&quot;star.trimmer.TrimmerAutoMesher&quot;,&quot;star.prismmesher.PrismAutoMesher&quot;),Arrays.asList(fluid));op.setPresentationName(&quot;VF_Mesh&quot;);
+  // baseSize、prismThickness、bodySize、bodyMin 均使用米；层数和增长率无量纲。
+  op.getDefaultValues().get(BaseSize.class).setValue(Double.parseDouble(p.getProperty(&quot;baseSize&quot;)));
+  op.getDefaultValues().get(NumPrismLayers.class).setNumLayers(Integer.parseInt(p.getProperty(&quot;layers&quot;)));
+  PrismThickness th=op.getDefaultValues().get(PrismThickness.class);th.getRelativeOrAbsoluteOption().setSelected(RelativeOrAbsoluteOption.Type.ABSOLUTE);th.getAbsoluteSizeValue().setValue(Double.parseDouble(p.getProperty(&quot;prismThickness&quot;)));
+  op.getDefaultValues().get(PrismLayerStretching.class).setStretching(Double.parseDouble(p.getProperty(&quot;prismStretch&quot;)));
+  // 只对机身表面使用局部目标/最小尺寸，外部区域仍采用全局基础尺寸。
+  SurfaceCustomMeshControl c=op.getCustomMeshControls().createSurfaceControl();c.setPresentationName(&quot;VF_BodyResolution&quot;);c.getGeometryObjects().setObjects(wall);
+  c.getCustomConditions().get(PartsTargetSurfaceSizeOption.class).setSelected(PartsTargetSurfaceSizeOption.Type.CUSTOM);
+  c.getCustomConditions().get(PartsMinimumSurfaceSizeOption.class).setSelected(PartsMinimumSurfaceSizeOption.Type.CUSTOM);
+  PartsTargetSurfaceSize ts=c.getCustomValues().get(PartsTargetSurfaceSize.class);ts.getRelativeOrAbsoluteOption().setSelected(RelativeOrAbsoluteOption.Type.ABSOLUTE);ts.getAbsoluteSizeValue().setValue(Double.parseDouble(p.getProperty(&quot;bodySize&quot;)));
+  PartsMinimumSurfaceSize ms=c.getCustomValues().get(PartsMinimumSurfaceSize.class);ms.getRelativeOrAbsoluteOption().setSelected(RelativeOrAbsoluteOption.Type.ABSOLUTE);ms.getAbsoluteSizeValue().setValue(Double.parseDouble(p.getProperty(&quot;bodyMin&quot;)));
+  // 先保留网格生成前的 setup.sim，再生成网格并记录单元数，便于失败定位。
+  s.saveState(root+&quot;/C-run/&quot;+id+&quot;/setup.sim&quot;);s.println(&quot;VF_STAGE=MESH_BEGIN&quot;);op.execute();
+  FvRepresentation mesh=(FvRepresentation)s.getRepresentationManager().getObject(&quot;Volume Mesh&quot;);s.println(&quot;VF_CELL_COUNT=&quot;+mesh.getCellCount());
+  // 零单元属于致命错误；meshed.sim 是成功生成体网格后的检查点。
+  if(mesh.getCellCount()==0)throw new RuntimeException(&quot;Empty mesh&quot;);s.saveState(root+&quot;/C-run/&quot;+id+&quot;/meshed.sim&quot;);s.println(&quot;VF_STAGE=MESH_COMPLETE&quot;);
+ }
+}
+
+</code></pre></details><details id="src12"><summary>cfd/UDF/SolveCanopy.java</summary><p class="note">设置 SST 流场与力报告，初始化并执行初始迭代。</p><pre><code>// 第二阶段：给网格设置空气和边界条件，建立监测量，并完成初始迭代。
+// 物理参数读取 solver.properties；当前接口固定来流 +X、迎角 0°。
+import java.util.*;
+import java.io.*;
+import java.nio.file.*;
+import star.common.*;
+import star.base.neo.*;
+import star.base.report.*;
+import star.flow.*;
+import star.metrics.*;
+import star.material.*;
+import star.segregatedflow.*;
+import star.turbulence.*;
+import star.kwturb.*;
+public class SolveCanopy extends StarMacro {
+ Simulation s; Properties p=new Properties();
+ // 将派生参数中的数值字符串转成 double；单位采用 SI。
+ double val(String k){return Double.parseDouble(p.getProperty(k));}
+ public void execute(){
+  s=getActiveSimulation();String root=System.getenv(&quot;VF_CANOPY_ROOT&quot;),id=System.getenv(&quot;VF_CANOPY_CASE&quot;),folder=root+&quot;/C-run/&quot;+id;
+  try{
+   try(FileInputStream in=new FileInputStream(root+&quot;/0-caseDict/solver.properties&quot;)){p.load(in);}
+   // 使用三维、稳态、恒密度、分离流求解和 SST k-omega RANS；全 y+ 壁面处理。
+   PhysicsContinuum pc=s.getContinuumManager().createContinuum(PhysicsContinuum.class);pc.setPresentationName(&quot;VF_Air&quot;);
+   pc.enable(ThreeDimensionalModel.class);pc.enable(SteadyModel.class);pc.enable(SingleComponentGasModel.class);pc.enable(SegregatedFlowModel.class);pc.enable(ConstantDensityModel.class);pc.enable(TurbulentModel.class);pc.enable(RansTurbulenceModel.class);pc.enable(KOmegaTurbulence.class);pc.enable(SstKwTurbModel.class);pc.enable(KwAllYplusWallTreatment.class);
+   // rho 单位 kg/m^3，mu 单位 Pa.s；均从配置读取，而非由几何推断。
+   Material air=pc.getModelManager().getModel(SingleComponentGasModel.class).getMaterial();air.getMaterialProperties().getMaterialProperty(ConstantDensityProperty.class).setConstant(val(&quot;rho&quot;));air.getMaterialProperties().getMaterialProperty(DynamicViscosityProperty.class).setConstant(val(&quot;mu&quot;));
+   // referencePressure 是参考绝对压力；出口设 0 表压，即相对于该参考压力。
+   pc.getReferenceValues().get(ReferencePressure.class).setValue(val(&quot;referencePressure&quot;));
+   // 初始速度和入口来流均指向 +X；speed 单位 m/s。
+   pc.getInitialConditions().get(VelocityProfile.class).getMethod(ConstantVectorProfileMethod.class).getQuantity().setComponents(val(&quot;speed&quot;),0,0);
+   // 这里保留历史实现计算的湍动能候选值；实际设置使用下方的强度/黏度比，不使用 kin。
+   double kin=1.5*Math.pow(val(&quot;speed&quot;)*val(&quot;intensity&quot;),2);
+   // 将入口同源的湍流强度与湍黏度比用于初始场；强度 0.005 表示 0.5%。
+   for(Object obj:pc.getInitialConditions().getObjects()){ s.println(&quot;VF_INITIAL=&quot;+obj.getClass().getName()); if(obj instanceof TurbulenceIntensityProfile)((TurbulenceIntensityProfile)obj).getMethod(ConstantScalarProfileMethod.class).getQuantity().setValue(val(&quot;intensity&quot;)); if(obj instanceof TurbulentViscosityRatioProfile)((TurbulentViscosityRatioProfile)obj).getMethod(ConstantScalarProfileMethod.class).getQuantity().setValue(val(&quot;viscosityRatio&quot;)); }
+   
+   // 复用 BuildCanopy 创建的 VF_Fluid 区域，避免把物理模型挂到错误对象。
+   Region reg=s.getRegionManager().getRegion(&quot;VF_Fluid&quot;);reg.setPhysicsContinuum(pc);
+   List&lt;Boundary&gt; walls=new ArrayList&lt;&gt;(),inlets=new ArrayList&lt;&gt;(),outlets=new ArrayList&lt;&gt;();
+   // 入口用 +X 速度、出口用参考压力；壁面沿用静止无滑移默认设置。
+   for(Boundary b:reg.getBoundaryManager().getBoundaries()){
+    if(b.getBoundaryType() instanceof InletBoundary){inlets.add(b);b.getConditions().get(FlowDirectionOption.class).setSelected(FlowDirectionOption.Type.COMPONENTS);b.getValues().get(FlowDirectionProfile.class).getMethod(ConstantVectorProfileMethod.class).getQuantity().setComponents(1,0,0);b.getValues().get(VelocityMagnitudeProfile.class).getMethod(ConstantScalarProfileMethod.class).getQuantity().setValue(val(&quot;speed&quot;));turb(b);}
+    else if(b.getBoundaryType() instanceof PressureBoundary){outlets.add(b);b.getValues().get(StaticPressureProfile.class).getMethod(ConstantScalarProfileMethod.class).getQuantity().setValue(0);turb(b);}
+    else if(b.getBoundaryType() instanceof WallBoundary &amp;&amp; !b.getPartSurfaceGroup().getObjects().isEmpty())walls.add(b);
+   }
+   // 必须识别出一个入口、一个出口和至少一个机身壁面，才能继续求解。
+   if(inlets.size()!=1||outlets.size()!=1||walls.isEmpty())throw new RuntimeException(&quot;Invalid boundary mapping&quot;);
+   // 力积分覆盖完整机身壁面：阻力 +X，升力 +Z，侧向力 +Y，输出单位 N。
+   // 这里只变形舱盖，但评价的是整机身气动力，而不是单独舱盖受力。
+   ForceReport drag=force(&quot;VF_Drag&quot;,walls,1,0,0),lift=force(&quot;VF_Lift&quot;,walls,0,0,1),side=force(&quot;VF_Side&quot;,walls,0,1,0);
+   // 入口/出口质量流量用于守恒检查；相对不平衡为 |入口+出口|/|入口|。
+   MassFlowReport mi=s.getReportManager().createReport(MassFlowReport.class);mi.setPresentationName(&quot;VF_InletMass&quot;);mi.getParts().setObjects(inlets);
+   MassFlowReport mo=s.getReportManager().createReport(MassFlowReport.class);mo.setPresentationName(&quot;VF_OutletMass&quot;);mo.getParts().setObjects(outlets);
+   // 最小体积、最小单元质量和壁面平均 y+ 用于网格/近壁处理的基本审阅。
+   MinReport minvol=s.getReportManager().createReport(MinReport.class);minvol.setPresentationName(&quot;VF_MinVolume&quot;);minvol.getParts().setObjects(reg);minvol.setFieldFunction((PrimitiveFieldFunction)s.getFieldFunctionManager().getFunction(&quot;Volume&quot;));
+   MinReport minq=s.getReportManager().createReport(MinReport.class);minq.setPresentationName(&quot;VF_MinCellQuality&quot;);minq.getParts().setObjects(reg);minq.setFieldFunction((PrimitiveFieldFunction)s.getFieldFunctionManager().getFunction(&quot;CellQuality&quot;));
+   AreaAverageReport yp=s.getReportManager().createReport(AreaAverageReport.class);yp.setPresentationName(&quot;VF_MeanWallYplus&quot;);yp.getParts().setObjects(walls);yp.setFieldFunction((PrimitiveFieldFunction)s.getFieldFunctionManager().getFunction(&quot;WallYplus&quot;));
+   // 初始化后检查体积为正；本检查不能代替完整的网格质量和加密验证。
+   s.getSolution().initializeSolution();double mv=minvol.getReportMonitorValue(),mq=minq.getReportMonitorValue();s.println(&quot;VF_MESH_MIN_VOLUME=&quot;+mv+&quot; MIN_QUALITY=&quot;+mq);if(!(mv&gt;0))throw new RuntimeException(&quot;Nonpositive mesh volume&quot;);
+   s.saveState(folder+&quot;/configured.sim&quot;);
+   // 启动器可用 VF_CANOPY_ITERATIONS 把本阶段限制为初算步数，第三个宏再继续到最大步数。
+   StepStoppingCriterion stop=(StepStoppingCriterion)s.getSolverStoppingCriterionManager().getSolverStoppingCriterion(&quot;Maximum Steps&quot;);int max=(int)val(&quot;maxIterations&quot;);String limit=System.getenv(&quot;VF_CANOPY_ITERATIONS&quot;);if(limit!=null)max=Integer.parseInt(limit);stop.setMaximumNumberSteps(max);
+   // history.csv 从头写入；初算阶段固定每 10 次迭代采样，默认配置与此相同。
+   // 每 100 次保存 checkpoint；检查力值非有限或异常巨大时停止。
+   try(PrintWriter out=new PrintWriter(new FileWriter(folder+&quot;/history.csv&quot;))){out.println(&quot;iteration,drag_N,lift_N,side_N,pressure_drag_N,viscous_drag_N,inlet_kg_s,outlet_kg_s,mass_imbalance_relative,wall_yplus_mean&quot;);out.flush();
+    for(int target=10;target&lt;=max;target+=10){s.getSimulationIterator().step(10);int it=s.getSimulationIterator().getCurrentIteration();double d=drag.getReportMonitorValue(),l=lift.getReportMonitorValue(),sf=side.getReportMonitorValue(),i=mi.getReportMonitorValue(),o=mo.getReportMonitorValue(),y=yp.getReportMonitorValue();out.printf(Locale.US,&quot;%d,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g%n&quot;,it,d,l,sf,drag.getPressureValue().x,drag.getShearValue().x,i,o,Math.abs(i+o)/Math.max(Math.abs(i),1e-12),y);out.flush();if(!Double.isFinite(d)||Math.abs(d)&gt;1e7)throw new RuntimeException(&quot;Force divergence&quot;);if(it%100==0){s.println(&quot;VF_PROGRESS=&quot;+it+&quot; DRAG=&quot;+d+&quot; LIFT=&quot;+l);s.saveState(folder+&quot;/checkpoint.sim&quot;);}}
+   }
+   // 导出软件原生残差以及机身表面压力/y+，保留后处理和审阅依据。
+   for(Monitor m:s.getMonitorManager().getObjects())if(m instanceof ResidualMonitor)m.export(folder+&quot;/residual_&quot;+m.getPresentationName().replaceAll(&quot;[^A-Za-z0-9_-]&quot;,&quot;_&quot;)+&quot;.csv&quot;);
+   XyzInternalTable table=s.getTableManager().createTable(XyzInternalTable.class);table.setPresentationName(&quot;VF_SurfacePressure&quot;);table.getParts().setObjects(walls);table.setFieldFunctions(new NeoObjectVector(new Object[]{s.getFieldFunctionManager().getFunction(&quot;Pressure&quot;),s.getFieldFunctionManager().getFunction(&quot;WallYplus&quot;)}));table.extract();table.export(folder+&quot;/surface.csv&quot;,&quot;,&quot;);
+   // SOLVE_COMPLETE 仅表示初算阶段结束；最终完成/收敛由 AdvanceCanopy 给出。
+   s.saveState(folder+&quot;/result.sim&quot;);s.println(&quot;VF_STAGE=SOLVE_COMPLETE&quot;);
+  }catch(Exception e){s.println(&quot;VF_ERROR=&quot;+e);throw new RuntimeException(e);}
+ }
+ // 用同一组湍流强度和黏度比设置入口/出口，避免不同方案采用不同假设。
+ void turb(Boundary b){b.getConditions().get(KwTurbSpecOption.class).setSelected(KwTurbSpecOption.Type.INTENSITY_VISCOSITY_RATIO);b.getValues().get(TurbulenceIntensityProfile.class).getMethod(ConstantScalarProfileMethod.class).getQuantity().setValue(val(&quot;intensity&quot;));b.getValues().get(TurbulentViscosityRatioProfile.class).getMethod(ConstantScalarProfileMethod.class).getQuantity().setValue(val(&quot;viscosityRatio&quot;));}
+ // 建立沿给定单位方向的整壁面力报告，并创建相应监视器。
+ ForceReport force(String name,List&lt;Boundary&gt; walls,double x,double y,double z){ForceReport r=s.getReportManager().createReport(ForceReport.class);r.setPresentationName(name);r.getDirection().setComponents(x,y,z);r.getParts().setObjects(walls);r.createMonitor();return r;}
+}
+
+
+
+
+</code></pre></details><details id="src13"><summary>cfd/UDF/AdvanceCanopy.java</summary><p class="note">继续迭代、判断收敛、导出结果与最终 .sim。</p><pre><code>// 第三阶段：接续初算，按窗口检查收敛，保存最终结果和可机读的判断依据。
+// 达到最大迭代数也会保存结果，但 converged=false 不能解释为优化有效。
+import java.util.*;
+import java.io.*;
+import star.common.*;
+import star.base.neo.*;
+import star.base.report.*;
+import star.flow.*;
+public class AdvanceCanopy extends StarMacro {
+ public void execute(){
+  // 与前两个宏在同一仿真进程中运行，复用已经建好的网格、连续体和监测报告。
+  Simulation s=getActiveSimulation();String root=System.getenv(&quot;VF_CANOPY_ROOT&quot;),id=System.getenv(&quot;VF_CANOPY_CASE&quot;),folder=root+&quot;/C-run/&quot;+id;
+  try{
+   // 阈值和采样间隔均来自 caseDict 的派生配置，不在本宏中另设一套。
+   Properties p=new Properties();try(FileInputStream in=new FileInputStream(root+&quot;/0-caseDict/solver.properties&quot;)){p.load(in);}
+   // 将最大步数恢复为完整计算上限；不是把最大步数当作收敛证据。
+   int max=Integer.parseInt(p.getProperty(&quot;maxIterations&quot;));((StepStoppingCriterion)s.getSolverStoppingCriterionManager().getSolverStoppingCriterion(&quot;Maximum Steps&quot;)).setMaximumNumberSteps(max);
+   ForceReport drag=(ForceReport)s.getReportManager().getReport(&quot;VF_Drag&quot;),lift=(ForceReport)s.getReportManager().getReport(&quot;VF_Lift&quot;),side=(ForceReport)s.getReportManager().getReport(&quot;VF_Side&quot;);Report mi=s.getReportManager().getReport(&quot;VF_InletMass&quot;),mo=s.getReportManager().getReport(&quot;VF_OutletMass&quot;),yp=s.getReportManager().getReport(&quot;VF_MeanWallYplus&quot;);
+   // convergenceWindow 是迭代跨度，除以 sampleEvery 得到每个窗口的采样点数。
+   // 窗口样本仅累计本续算阶段的数据，不包含前一宏的初算点。
+   int sample=Integer.parseInt(p.getProperty(&quot;sampleEvery&quot;)), window=Integer.parseInt(p.getProperty(&quot;convergenceWindow&quot;))/sample;
+   List&lt;Double&gt; ds=new ArrayList&lt;&gt;();boolean converged=false;double drift=Double.NaN,range=Double.NaN,mass=Double.NaN,resmax=Double.NaN;
+   // 以追加方式写入同一 history.csv，保留初算历史；每次前进后才记录一行。
+   try(PrintWriter out=new PrintWriter(new FileWriter(folder+&quot;/history.csv&quot;,true))){
+    while(s.getSimulationIterator().getCurrentIteration()&lt;max){int before=s.getSimulationIterator().getCurrentIteration();s.getSimulationIterator().step(Math.min(sample,max-before));int it=s.getSimulationIterator().getCurrentIteration();if(it&lt;=before)throw new RuntimeException(&quot;Iteration did not advance&quot;);
+     // 力单位 N、流量单位 kg/s；质量不平衡无量纲，避免单看残差判断收敛。
+     double d=drag.getReportMonitorValue(),l=lift.getReportMonitorValue(),sf=side.getReportMonitorValue(),i=mi.getReportMonitorValue(),o=mo.getReportMonitorValue(),y=yp.getReportMonitorValue();mass=Math.abs(i+o)/Math.max(Math.abs(i),1e-12);ds.add(d);out.printf(Locale.US,&quot;%d,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g,%.12g%n&quot;,it,d,l,sf,drag.getPressureValue().x,drag.getShearValue().x,i,o,mass,y);out.flush();if(!Double.isFinite(d)||Math.abs(d)&gt;1e7)throw new RuntimeException(&quot;Force divergence&quot;);
+     // 定期保存带迭代编号的检查点，异常退出时可保留排错依据。
+     if(it%100==0){s.println(&quot;VF_PROGRESS=&quot;+it+&quot; DRAG=&quot;+d+&quot; LIFT=&quot;+l);s.saveState(folder+&quot;/checkpoint_&quot;+it+&quot;.sim&quot;);}
+     // 满足最少迭代数且累积两个窗口后比较：两窗阻力均值漂移、末窗极差、质量不平衡、最终残差。
+     // drift=|前窗均值-后窗均值|/|后窗均值|；range=(后窗最大-最小)/|后窗均值|。
+     if(it&gt;=Integer.parseInt(p.getProperty(&quot;minimumIterations&quot;)) &amp;&amp; ds.size()&gt;=2*window){int n=ds.size();double a=0,b=0,mn=Double.POSITIVE_INFINITY,mx=Double.NEGATIVE_INFINITY;for(int j=n-2*window;j&lt;n-window;j++)a+=ds.get(j)/window;for(int j=n-window;j&lt;n;j++){double z=ds.get(j);b+=z/window;mn=Math.min(mn,z);mx=Math.max(mx,z);}drift=Math.abs(a-b)/Math.max(Math.abs(b),1e-9);range=(mx-mn)/Math.max(Math.abs(b),1e-9);resmax=0;for(Monitor mon:s.getMonitorManager().getObjects())if(mon instanceof ResidualMonitor){double[] vals=((ResidualMonitor)mon).getAllYValues();if(vals.length&gt;0)resmax=Math.max(resmax,Math.abs(vals[vals.length-1]));}
+      // 四项条件须同时满足才提前停止；这是本算例的数值收敛标准，不代表物理精度已验证。
+      if(drift&lt;Double.parseDouble(p.getProperty(&quot;relativeDragDrift&quot;)) &amp;&amp; range&lt;Double.parseDouble(p.getProperty(&quot;relativeDragRange&quot;)) &amp;&amp; mass&lt;Double.parseDouble(p.getProperty(&quot;relativeMassImbalance&quot;)) &amp;&amp; resmax&lt;Double.parseDouble(p.getProperty(&quot;maximumNormalizedResidual&quot;))){converged=true;break;}
+     }
+    }
+   }
+   // 更新残差、表面场和最终仿真文件，使这些产物对应同一个最终迭代状态。
+   for(Monitor mon:s.getMonitorManager().getObjects())if(mon instanceof ResidualMonitor)mon.export(folder+&quot;/residual_&quot;+mon.getPresentationName().replaceAll(&quot;[^A-Za-z0-9_-]&quot;,&quot;_&quot;)+&quot;.csv&quot;);
+   XyzInternalTable table=(XyzInternalTable)s.getTableManager().getTable(&quot;VF_SurfacePressure&quot;);table.extract();table.export(folder+&quot;/surface.csv&quot;,&quot;,&quot;);s.saveState(folder+&quot;/final_result.sim&quot;);
+   // 将是否收敛和实际指标一起落盘；启动器/后处理读取此文件，无需人工抄数。
+   try(PrintWriter out=new PrintWriter(new FileWriter(folder+&quot;/convergence.json&quot;))){out.printf(Locale.US,&quot;{\&quot;converged\&quot;:%s,\&quot;iteration\&quot;:%d,\&quot;drag_relative_drift\&quot;:%.10g,\&quot;drag_relative_range\&quot;:%.10g,\&quot;mass_imbalance_relative\&quot;:%.10g,\&quot;max_final_normalized_residual\&quot;:%.10g}%n&quot;,converged,s.getSimulationIterator().getCurrentIteration(),drift,range,mass,resmax);}
+   // 完成标记表示宏正常执行到底；还必须查看 CONVERGED 的值。
+   s.println(&quot;VF_STAGE=CASE_COMPLETE CONVERGED=&quot;+converged);
+  }catch(Exception e){s.println(&quot;VF_ERROR=&quot;+e);throw new RuntimeException(e);}
+ }
+}
+</code></pre></details><details id="src14"><summary>cfd/D-post/postprocess.py</summary><p class="note">读取真实历史，生成对比表、图片和 HTML 报告。</p><pre><code># 用途：只读取已完成算例的真实日志与 history.csv，生成对比表、图片和 HTML 报告。
+# 本脚本不启动 CFD，也不根据 FFD 位移估算气动力。
+from pathlib import Path
+import json,csv,re,os
+import numpy as np
+import matplotlib
+matplotlib.use(&#x27;Agg&#x27;)
+import matplotlib.pyplot as plt
+from matplotlib import font_manager
+# 默认以脚本上一级为 CFD 项目根目录；也可用 VF_POST_ROOT 指向另一个同结构项目。
+R=Path(os.environ.get(&#x27;VF_POST_ROOT&#x27;,Path(__file__).resolve().parents[1])).resolve()
+D=R/&#x27;D-post&#x27;; D.mkdir(exist_ok=True)
+# 优先使用 Windows 微软雅黑，兼容从 Windows 或 WSL 执行；Agg 后端无需打开绘图窗口。
+for font in [Path(&#x27;/mnt/c/Windows/Fonts/msyh.ttc&#x27;),Path(&#x27;C:/Windows/Fonts/msyh.ttc&#x27;)]:
+ if font.exists():font_manager.fontManager.addfont(str(font));break
+plt.rcParams.update({&#x27;font.family&#x27;:&#x27;Microsoft YaHei&#x27;,&#x27;axes.unicode_minus&#x27;:False,&#x27;font.size&#x27;:10})
+# 配置用于方案标签、位移幅度、动压和统计窗口；力数据仍来自求解器历史。
+cfg=json.loads((R/&#x27;0-caseDict/caseDict&#x27;).read_text(encoding=&#x27;utf-8-sig&#x27;))
+v=cfg[&#x27;variants&#x27;]
+labels={&#x27;baseline&#x27;:&#x27;原始机身&#x27;,**{&#x27;variant_&#x27;+a[&#x27;id&#x27;]:a[&#x27;name&#x27;] for a in v}}
+# targetMaxMm 是目标最大节点位移，单位毫米，不代表整舱盖均匀移动或宽度增量。
+amplitudes={&#x27;baseline&#x27;:0,**{&#x27;variant_&#x27;+a[&#x27;id&#x27;]:a[&#x27;targetMaxMm&#x27;] for a in v}}
+# 动压 q=0.5*rho*V^2，单位 Pa；D/q 得到等效阻力面积 m^2，不是无参考面积的 Cd。
+q=.5*cfg[&#x27;air&#x27;][&#x27;rho&#x27;]*cfg[&#x27;flow&#x27;][&#x27;speed&#x27;]**2
+rows=[];histories={}
+# 缺少 convergence.json 的方案暂不纳入；存在该文件也可能 converged=false，后面会保留标记。
+for name,label in labels.items():
+ p=R/&#x27;C-run&#x27;/name
+ if not (p/&#x27;convergence.json&#x27;).exists(): continue
+ conv=json.loads((p/&#x27;convergence.json&#x27;).read_text())
+ h=np.genfromtxt(p/&#x27;history.csv&#x27;,delimiter=&#x27;,&#x27;,names=True)
+ # 同一迭代如出现重复记录，保留最后一条，避免重复计入统计。
+ _,idx=np.unique(h[&#x27;iteration&#x27;][::-1],return_index=True);h=h[np.sort(len(h)-1-idx)]
+ # 按最终迭代向前取一个 convergenceWindow；默认末 150 次迭代、每 10 次采样，共 15 点。
+ tail=h[h[&#x27;iteration&#x27;]&gt;h[&#x27;iteration&#x27;][-1]-cfg[&#x27;solver&#x27;][&#x27;convergenceWindow&#x27;]]
+ row={&#x27;case&#x27;:name,&#x27;name&#x27;:label,&#x27;target_max_displacement_mm&#x27;:amplitudes[name],&#x27;iterations&#x27;:int(h[&#x27;iteration&#x27;][-1]),&#x27;converged&#x27;:conv[&#x27;converged&#x27;],&#x27;samples&#x27;:len(tail)}
+ # 除迭代号外，对末窗各物理量取算术平均；保留极值和标准差供审阅波动。
+ for col in h.dtype.names:
+  if col!=&#x27;iteration&#x27;:row[col]=float(np.mean(tail[col]))
+ row.update(drag_std_N=float(np.std(tail[&#x27;drag_N&#x27;])),drag_min_N=float(tail[&#x27;drag_N&#x27;].min()),drag_max_N=float(tail[&#x27;drag_N&#x27;].max()),drag_area_m2=row[&#x27;drag_N&#x27;]/q,drag_drift=conv[&#x27;drag_relative_drift&#x27;],residual_max=conv[&#x27;max_final_normalized_residual&#x27;])
+ # 网格单元数与质量来自真实运行日志；兼容历史基线补充日志的读取路径。
+ log=(p/&#x27;batch.log&#x27;).read_text(errors=&#x27;replace&#x27;);match=re.search(r&#x27;VF_CELL_COUNT=(\d+)&#x27;,log)
+ row[&#x27;cells&#x27;]=int(match.group(1)) if match else cfg.get(&#x27;evidence&#x27;,{}).get(&#x27;baselineMeshCells&#x27;) if name==&#x27;baseline&#x27; else None
+ qualitylog=log+((p/&#x27;solve_smoke_v4.log&#x27;).read_text(errors=&#x27;replace&#x27;) if name==&#x27;baseline&#x27; and (p/&#x27;solve_smoke_v4.log&#x27;).exists() else &#x27;&#x27;)
+ match=re.search(r&#x27;VF_MESH_MIN_VOLUME=([^ ]+) MIN_QUALITY=([^\s]+)&#x27;,qualitylog)
+ row[&#x27;minimum_cell_volume_m3&#x27;]=float(match.group(1)) if match else None
+ row[&#x27;minimum_cell_quality&#x27;]=float(match.group(2)) if match else None
+ # 额外比较升力的前/后两个窗口漂移；该字段供审阅，不改变宏中的收敛判据。
+ prev=h[(h[&#x27;iteration&#x27;]&gt;h[&#x27;iteration&#x27;][-1]-2*cfg[&#x27;solver&#x27;][&#x27;convergenceWindow&#x27;]) &amp; (h[&#x27;iteration&#x27;]&lt;=h[&#x27;iteration&#x27;][-1]-cfg[&#x27;solver&#x27;][&#x27;convergenceWindow&#x27;])]
+ row[&#x27;lift_relative_drift&#x27;]=float(abs(np.mean(prev[&#x27;lift_N&#x27;])-row[&#x27;lift_N&#x27;])/max(abs(row[&#x27;lift_N&#x27;]),1e-12))
+ rows.append(row);histories[name]=h
+# 基线必须存在，才能计算相对减阻率；否则停止生成比较，避免使用错误参考值。
+if not rows or rows[0][&#x27;case&#x27;]!=&#x27;baseline&#x27;:raise SystemExit(&#x27;Baseline not finished; no comparison generated&#x27;)
+base=rows[0][&#x27;drag_N&#x27;]
+# 减阻率为 100*(基线阻力-方案阻力)/基线阻力；正值表示阻力降低。
+for r in rows:r.update(delta_drag_N=r[&#x27;drag_N&#x27;]-base,drag_reduction_percent=100*(base-r[&#x27;drag_N&#x27;])/base)
+# CSV 用 UTF-8 BOM 便于中文 Excel 读取；JSON 保存同一组数值供程序复用。
+with (D/&#x27;comparison.csv&#x27;).open(&#x27;w&#x27;,encoding=&#x27;utf-8-sig&#x27;,newline=&#x27;&#x27;) as f:
+ w=csv.DictWriter(f,fieldnames=list(rows[0]));w.writeheader();w.writerows(rows)
+(D/&#x27;comparison.json&#x27;).write_text(json.dumps(rows,ensure_ascii=False,indent=2),encoding=&#x27;utf-8&#x27;)
+# 左图是整机身阻力，右图是相对减阻率；未收敛方案加星号，不能据此认定优化有效。
+fig,axs=plt.subplots(1,2,figsize=(13,6.5),layout=&#x27;constrained&#x27;)
+y=np.arange(len(rows)); names=[(&#x27;基线&#x27; if i==0 else r[&#x27;case&#x27;][-2:])+&#x27; &#x27;+r[&#x27;name&#x27;]+(&#x27; *&#x27; if not r[&#x27;converged&#x27;] else &#x27;&#x27;) for i,r in enumerate(rows)]
+axs[0].barh(y,[r[&#x27;drag_N&#x27;] for r in rows],color=&#x27;#4477aa&#x27;)
+# 误差线仅表示末窗迭代波动，不是网格误差、统计置信区间或模型不确定度。
+axs[0].errorbar([r[&#x27;drag_N&#x27;] for r in rows],y,xerr=[[r[&#x27;drag_N&#x27;]-r[&#x27;drag_min_N&#x27;] for r in rows],[r[&#x27;drag_max_N&#x27;]-r[&#x27;drag_N&#x27;] for r in rows]],fmt=&#x27;none&#x27;,ecolor=&#x27;black&#x27;,capsize=3)
+axs[0].set_xlim(0,max(r[&#x27;drag_N&#x27;] for r in rows)*1.15)
+for i,r in enumerate(rows):axs[0].text(r[&#x27;drag_N&#x27;]+12,i,f&quot;{r[&#x27;drag_N&#x27;]:.2f}&quot;,va=&#x27;center&#x27;,fontsize=9)
+axs[0].set_yticks(y,names);axs[0].invert_yaxis();axs[0].set_xlabel(&#x27;整机身阻力 / N&#x27;);axs[0].grid(axis=&#x27;x&#x27;,alpha=.2)
+red=[r[&#x27;drag_reduction_percent&#x27;] for r in rows]
+axs[1].barh(y,red,color=[&#x27;#228833&#x27; if a&gt;0 else &#x27;#cc6677&#x27; for a in red]);
+# 减阻率误差线由基线与方案末窗极值组合构造，只用于显示迭代范围的影响。
+lo=[0]+[r[&#x27;drag_reduction_percent&#x27;]-100*(1-r[&#x27;drag_max_N&#x27;]/rows[0][&#x27;drag_min_N&#x27;]) for r in rows[1:]]
+hi=[0]+[100*(1-r[&#x27;drag_min_N&#x27;]/rows[0][&#x27;drag_max_N&#x27;])-r[&#x27;drag_reduction_percent&#x27;] for r in rows[1:]]
+axs[1].errorbar(red,y,xerr=[lo,hi],fmt=&#x27;none&#x27;,ecolor=&#x27;black&#x27;,capsize=3);axs[1].set_yticks(y,[&#x27;基线&#x27;]+[r[&#x27;case&#x27;][-2:] for r in rows[1:]]);axs[1].invert_yaxis();axs[1].axvline(0,color=&#x27;black&#x27;,lw=.7);axs[1].set_xlabel(&#x27;相对基线减阻率 / %（正值有利）&#x27;);axs[1].grid(axis=&#x27;x&#x27;,alpha=.2)
+span=max(max(map(abs,red)),1)
+for i,a in enumerate(red):axs[1].text(a+(hi[i]+span*.025 if a&gt;=0 else -lo[i]-span*.025),i,f&#x27;{a:+.2f}%&#x27;,ha=&#x27;left&#x27; if a&gt;=0 else &#x27;right&#x27;,va=&#x27;center&#x27;,fontsize=9)
+axs[1].set_xlim(min(min(red),0)-span*.3,max(max(red),0)+span*.3)
+fig.suptitle(&#x27;舱盖 FFD 方案对比 | 50 m/s，迎角 0°\n筛选网格结果；误差线为末150次迭代的阻力范围，非网格误差；*未满足收敛判据&#x27;,fontsize=12)
+fig.savefig(D/&#x27;drag_comparison.png&#x27;,dpi=180);fig.savefig(D/&#x27;drag_comparison.svg&#x27;);plt.close(fig)
+# 全部阻力历史直接由求解器采样绘制，用于检查趋势与窗口位置。
+fig,ax=plt.subplots(figsize=(11,5),layout=&#x27;constrained&#x27;)
+for name,h in histories.items():ax.plot(h[&#x27;iteration&#x27;],h[&#x27;drag_N&#x27;],label=&#x27;基线&#x27; if name==&#x27;baseline&#x27; else name[-2:])
+ax.set(xlabel=&#x27;迭代次数&#x27;,ylabel=&#x27;整机身阻力 / N&#x27;,title=&#x27;阻力迭代历史（真实求解数据）&#x27;);ax.legend(ncol=6);ax.grid(alpha=.2);fig.savefig(D/&#x27;convergence.png&#x27;,dpi=180);plt.close(fig)
+# 以下报告文字沿用当前 50 m/s、0° 和默认采样设置；换工况/采样策略时也需核对报告说明。
+# 同一网格策略下的小幅收益只作工程筛选，不能替代网格无关性或实验验证。
+report=[&#x27;# 舱盖FFD气动筛选结果&#x27;,&#x27;&#x27;,f&#x27;工况：V=50 m/s，迎角0°，来流+X，密度1.225 kg/m³，动力黏度1.7894e-5 Pa·s。动压{q:.2f} Pa。无旋翼、静止光滑无滑移壁面；SST k-ω稳态RANS，全y+壁面处理。&#x27;,&#x27;&#x27;,f&#x27;已完成 {len(rows)}/11 个模型。力为完整机身积分，升力正方向+Z。数据取末150次迭代、每10次采样的均值。&#x27;,&#x27;&#x27;, &#x27;|模型|阻力 N|减阻率 %|升力 N|压差阻力 N|黏性阻力 N|收敛|&#x27;,&#x27;|---|---:|---:|---:|---:|---:|---|&#x27;]
+for r in rows:report.append(f&quot;|{r[&#x27;case&#x27;]} {r[&#x27;name&#x27;]}|{r[&#x27;drag_N&#x27;]:.2f}|{r[&#x27;drag_reduction_percent&#x27;]:+.2f}|{r[&#x27;lift_N&#x27;]:.2f}|{r[&#x27;pressure_drag_N&#x27;]:.2f}|{r[&#x27;viscous_drag_N&#x27;]:.2f}|{&#x27;是&#x27; if r[&#x27;converged&#x27;] else &#x27;否&#x27;}|&quot;)
+report+=[&#x27;&#x27;,&#x27;减阻率=100×(基线阻力−方案阻力)/基线阻力。未选取任意参考面积，CSV提供等效阻力面积D/q。&#x27;,&#x27;&#x27;, &#x27;变形幅度见CSV的target_max_displacement_mm，为FFD目标最大节点位移，并非整个舱盖的均匀平移或总宽度增量。&#x27;,&#x27;&#x27;,&#x27;## 有效性与限制&#x27;,&#x27;&#x27;, &#x27;当前属于同一网格策略的工程筛选，未建立网格无关性。网格重生成误差、湍流/转捩假设误差未计入误差线。小幅收益与相近排名需要加密验证；未收敛方案不能认定优化有效。&#x27;,&#x27;&#x27;, &#x27;入口湍流强度0.5%、黏度比10为统一筛选假设；未包含旋翼、地面或安装干扰。默认自由转捩未建模，SST按全湍流处理。&#x27;,&#x27;&#x27;, &#x27;收敛判据：至少500次迭代，连续两个150次窗口的阻力均值差&lt;0.5%，末窗口阻力极差&lt;1%，质量不平衡&lt;0.1%，最终各归一化残差&lt;1e-3。达到1500次仍不满足时明确标为未收敛。&#x27;,&#x27;&#x27;, &#x27;文件：comparison.csv为完整数表；drag_comparison.png为对比图；convergence.png为阻力历史；C-run各目录保存history.csv、残差、surface.csv和final_result.sim。&#x27;]
+# HTML 中转义表格和说明文字，生成可直接打开的离线结果页。
+import html
+table_rows=&#x27;&#x27;.join(&#x27;&lt;tr&gt;&#x27;+&#x27;&#x27;.join(&#x27;&lt;td&gt;&#x27;+html.escape(str(x))+&#x27;&lt;/td&gt;&#x27; for x in [r[&#x27;case&#x27;]+&#x27; &#x27;+r[&#x27;name&#x27;],f&quot;{r[&#x27;drag_N&#x27;]:.2f}&quot;,f&quot;{r[&#x27;drag_reduction_percent&#x27;]:+.2f}&quot;,f&quot;{r[&#x27;lift_N&#x27;]:.2f}&quot;,f&quot;{r[&#x27;pressure_drag_N&#x27;]:.2f}&quot;,f&quot;{r[&#x27;viscous_drag_N&#x27;]:.2f}&quot;,&#x27;是&#x27; if r[&#x27;converged&#x27;] else &#x27;否&#x27;])+&#x27;&lt;/tr&gt;&#x27; for r in rows)
+report_html=&#x27;&lt;!doctype html&gt;&lt;html lang=&quot;zh-CN&quot;&gt;&lt;head&gt;&lt;meta charset=&quot;utf-8&quot;&gt;&lt;meta name=&quot;viewport&quot; content=&quot;width=device-width,initial-scale=1&quot;&gt;&lt;title&gt;舱盖FFD气动筛选结果&lt;/title&gt;&lt;style&gt;body{max-width:1100px;margin:40px auto;padding:24px;font:16px/1.8 system-ui,&quot;Microsoft YaHei&quot;;color:#23354b}table{border-collapse:collapse;width:100%;font-size:14px}td,th{padding:10px;border-bottom:1px solid #dde4ec;text-align:left}th{background:#eef5fa}img{max-width:100%}&lt;/style&gt;&lt;/head&gt;&lt;body&gt;&lt;h1&gt;舱盖FFD气动筛选结果&lt;/h1&gt;&lt;p&gt;&#x27;+html.escape(report[2])+&#x27;&lt;/p&gt;&lt;p&gt;&#x27;+html.escape(report[4])+&#x27;&lt;/p&gt;&lt;table&gt;&lt;tr&gt;&lt;th&gt;模型&lt;/th&gt;&lt;th&gt;阻力/N&lt;/th&gt;&lt;th&gt;减阻率/%&lt;/th&gt;&lt;th&gt;升力/N&lt;/th&gt;&lt;th&gt;压差阻力/N&lt;/th&gt;&lt;th&gt;黏性阻力/N&lt;/th&gt;&lt;th&gt;收敛&lt;/th&gt;&lt;/tr&gt;&#x27;+table_rows+&#x27;&lt;/table&gt;&lt;h2&gt;有效性与限制&lt;/h2&gt;&#x27;+&#x27;&#x27;.join(&#x27;&lt;p&gt;&#x27;+html.escape(t)+&#x27;&lt;/p&gt;&#x27; for t in report if t and not t.startswith((&#x27;#&#x27;,&#x27;|&#x27;)) and t not in [report[2],report[4]])+&#x27;&lt;p&gt;&lt;a href=&quot;../D-post/comparison.csv&quot;&gt;完整数表&lt;/a&gt;&lt;/p&gt;&lt;img src=&quot;../D-post/drag_comparison.png&quot; alt=&quot;各方案阻力比较&quot;&gt;&lt;/body&gt;&lt;/html&gt;&#x27;
+(R/&#x27;E-report&#x27;).mkdir(exist_ok=True);(R/&#x27;E-report/results.html&#x27;).write_text(report_html,encoding=&#x27;utf-8&#x27;)
+print(json.dumps(rows,ensure_ascii=False,indent=2))
+# 绘制软件原始归一化残差；1e-3 虚线是当前配置采用的阈值，不单独证明收敛。
+# Residual audit panels, retaining native normalized monitor values.
+fig,axs=plt.subplots(3,4,figsize=(14,9),layout=&#x27;constrained&#x27;)
+for ax,r in zip(axs.flat,rows):
+ for f in sorted((R/&#x27;C-run&#x27;/r[&#x27;case&#x27;]).glob(&#x27;residual_*.csv&#x27;)):
+  data=np.genfromtxt(f,delimiter=&#x27;,&#x27;,skip_header=1)
+  if data.ndim==2 and data.shape[1]&gt;=2:ax.semilogy(data[:,0],np.maximum(data[:,1],1e-16),lw=.8,label=f.stem[9:])
+ ax.axhline(.001,color=&#x27;black&#x27;,ls=&#x27;:&#x27;,lw=.7);ax.set_title(&#x27;基线&#x27; if r[&#x27;case&#x27;]==&#x27;baseline&#x27; else r[&#x27;case&#x27;][-2:]);ax.grid(alpha=.15);ax.set_xlabel(&#x27;迭代次数&#x27;);ax.set_ylabel(&#x27;归一化残差&#x27;)
+for ax in list(axs.flat)[len(rows):]:ax.set_visible(False)
+axs.flat[0].legend(fontsize=7,ncol=2);fig.suptitle(&#x27;残差监测；虚线为1e-3阈值&#x27;);fig.savefig(D/&#x27;residuals.png&#x27;,dpi=160);plt.close(fig)
+# 基本一致性检查：方案唯一、数据有限、默认末窗为 15 点、网格体积为正、分力之和等于总阻力。
+# 其中 15 点是现有流程的明确约束；修改采样间隔或窗口后不能直接套用该断言。
+# Consistency checks are independent of plotting logic.
+assert len({r[&#x27;case&#x27;] for r in rows})==len(rows)
+for r in rows:
+ assert np.isfinite(r[&#x27;drag_N&#x27;]) and r[&#x27;samples&#x27;]==15
+ assert r[&#x27;minimum_cell_volume_m3&#x27;] is not None and r[&#x27;minimum_cell_volume_m3&#x27;]&gt;0
+ assert r[&#x27;cells&#x27;] is not None and r[&#x27;cells&#x27;]&gt;0
+ assert abs(r[&#x27;drag_N&#x27;]-r[&#x27;pressure_drag_N&#x27;]-r[&#x27;viscous_drag_N&#x27;])&lt;1e-5
+fig,ax=plt.subplots(figsize=(11,5),layout=&#x27;constrained&#x27;)
+x=np.arange(len(rows)-1)
+# 将总阻力变化拆为压差项与黏性项；两项之和应与相对基线的总变化一致。
+pdelta=np.array([r[&#x27;pressure_drag_N&#x27;]-rows[0][&#x27;pressure_drag_N&#x27;] for r in rows[1:]])
+vdelta=np.array([r[&#x27;viscous_drag_N&#x27;]-rows[0][&#x27;viscous_drag_N&#x27;] for r in rows[1:]])
+ax.bar(x-.18,pdelta,width=.36,color=&#x27;#4477aa&#x27;,label=&#x27;压差阻力变化&#x27;);ax.bar(x+.18,vdelta,width=.36,color=&#x27;#ee9944&#x27;,label=&#x27;黏性阻力变化&#x27;)
+ax.plot(x,pdelta+vdelta,&#x27;ko&#x27;,label=&#x27;总阻力变化&#x27;,markersize=4);ax.axhline(0,color=&#x27;black&#x27;,lw=.7)
+ax.set_xticks(x,[r[&#x27;case&#x27;][-2:] for r in rows[1:]]);ax.set(xlabel=&#x27;方案编号&#x27;,ylabel=&#x27;相对原始机身的阻力变化 / N&#x27;,title=&#x27;阻力变化来源（负值表示降低）&#x27;);ax.grid(axis=&#x27;y&#x27;,alpha=.2);ax.legend(ncol=3)
+fig.savefig(D/&#x27;drag_components.png&#x27;,dpi=180);plt.close(fig)
+</code></pre></details>
+<footer>本次注释版保留原模型、物理参数与计算算法；公开版将本机专用路径改为首次配置和通用缺省。注释版已对比 Python 语法树、Java 非注释标记、PowerShell 标记和 CMD 可执行行；公开版另核对仅启动路径缺省发生调整；不据此宣称本次重新运行或验证了 CFD。源码采用 UTF-8，PowerShell 文件保留 BOM 以兼容 Windows PowerShell。</footer>
+</main></body></html>

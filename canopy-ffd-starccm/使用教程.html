@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>舱盖变形与计算：简单使用</title><style>
+*{box-sizing:border-box}body{margin:0;background:#f1f5f8;color:#263b4b;font:17px/1.85 system-ui,"Microsoft YaHei",sans-serif}main{max-width:850px;margin:32px auto;background:white;padding:32px 40px;border-radius:14px}h1{font-size:29px;margin:0 0 10px;line-height:1.45}h2{font-size:20px;margin:0 0 6px;color:#175e83}p{margin:9px 0}.intro{color:#607584}.download{display:inline-block;padding:10px 22px;border-radius:7px;background:#14668e;color:white;text-decoration:none;margin:14px 0 20px;font-weight:600}.step{display:grid;grid-template-columns:40px 1fr;gap:14px;padding:19px 0;border-top:1px solid #dde6eb}.number{width:35px;height:35px;line-height:35px;border-radius:50%;background:#e7f1f7;color:#17658d;text-align:center;font-weight:700}.menu{display:grid;grid-template-columns:36px 1fr;gap:4px 12px;margin:12px 0;padding:13px 17px;background:#f3f7fa;border-radius:7px}.key{font-weight:700;color:#14668e}.tip{border-left:4px solid #3e8a72;background:#edf7f2;padding:12px 16px;margin:15px 0}.note{font-size:14px;color:#627787}details{border:1px solid #dce6ed;border-radius:7px;padding:12px 16px;margin:16px 0}summary{font-weight:600;cursor:pointer}code{font-family:Consolas,"Microsoft YaHei",monospace;background:#f0f4f7;padding:2px 5px;border-radius:3px}li{margin:7px 0}footer{margin-top:22px;padding-top:14px;border-top:1px solid #dde6eb;font-size:13px;color:#697d8b}a{color:#14668e}@media(max-width:600px){main{margin:0;padding:25px 20px;border-radius:0}h1{font-size:25px}.step{grid-template-columns:32px 1fr;gap:10px}.number{width:30px;height:30px;line-height:30px}}@media print{body{background:white}main{margin:0;padding:0}.download{color:#14668e;background:none;padding:0}}
+</style></head><body><main>
+<h1>舱盖变形与计算：照着做就行</h1>
+<p class="intro">现在只用一个“开始使用”入口。路径和中间文件由程序管理。</p>
+<p><strong>默认任务：</strong>只变形指定舱盖，生成 10 组方案；50 m/s、迎角 0°，用 STAR-CCM+ 比较阻力。</p>
+<a class="download" href="运行文件.zip" download>① 下载双击运行包</a>
+
+<section class="step"><div class="number">1</div><div><h2>解压，然后双击</h2><p>将 ZIP <strong>全部解压</strong>，打开里面的 <code>project</code> 文件夹，双击：</p><p><strong>开始使用.cmd</strong></p><p class="note">首次会先弹窗选择 Windows Python。然后在菜单 5 设置 STAR 路径，WSL 默认 Ubuntu＋/usr/bin/python3，需按自己的环境核对。</p><p class="note">不要在压缩包里直接双击。这个 HTML 是说明页，实际操作在解压后的入口窗口完成。</p></div></section>
+
+<section class="step"><div class="number">2</div><div><h2>先检查，再生成模型</h2><p>窗口里输入数字，按回车：</p><div class="menu"><span class="key">1</span><span><strong>检查电脑</strong>——第一次使用先选它。</span><span class="key">2</span><span><strong>生成模型</strong>——生成 10 组舱盖，完成后自动打开三维预览。</span></div><p>生成时会自动完成几何检查、毫米转米和 STAR 输入准备。</p><p class="note">这两个选项都不启动 CFD 求解。每次选 2 都建立一个新批次，原模型和旧结果会保留。</p></div></section>
+
+<section class="step"><div class="number">3</div><div><h2>需要算气动时，选择 3</h2><div class="menu"><span class="key">3</span><span><strong>开始气动计算</strong>——会启动 STAR 并使用计算许可。</span></div><p>程序先算原始机身，通过收敛检查后再算 10 组方案。计算完成后，自动生成并打开对比报告。</p><p class="note">共 11 个算例，每例默认 4 个进程、依次运行。计算时保留入口窗口。</p></div></section>
+
+<div class="tip"><strong>以后再看结果：</strong>重新双击“开始使用.cmd”，选择 <strong>4</strong>。模型、日志和报告都保存在 <code>project/结果/</code> 中。</div>
+
+<details id="paths"><summary>第一次没通过检查，怎么办？</summary><p>选择菜单 <strong>5「设置软件位置」</strong>。Windows Python 和 STAR 可以在弹出的文件选择窗口中选取；WSL 发行版和 Python 地址按已有环境填写。</p><p>公开版不预填某台电脑的安装路径。第一次启动时先选择可运行的 <code>python.exe</code>，再在菜单 5 选择 STAR，并核对 WSL 发行版和 Python。配置集中保存在 <code>settings.json</code>。</p><p>如果提示缺少软件、Python 包或许可，把提示和日志发给 AI 处理，再重新检查即可。入口不会自动安装软件或修改系统设置。</p></details>
+
+<details><summary>想了解 FFD 或 STAR 是怎么连接的？</summary><p>打开解压后 <code>project/详细说明.html</code>。里面保留控制点、10 个方案、单位转换、三个 Java 宏、逐条命令和排错说明。</p><p>简单入口使用同一套 FFD 算法与 STAR 宏；新增的只是菜单、文件衔接和检查。</p></details>
+
+<details><summary>想读懂代码或交接给别人？</summary><p><a href="代码备注.html">打开代码备注</a>：先看文件作用与调用顺序，再按需展开带中文注释的完整源码。</p><p>公开运行包已经包含这些注释，日常操作入口不变。</p></details>
+
+<details><summary>有错误或想重算，怎么办？</summary><p>先看窗口给出的中文提示。失败批次和日志会保留；需要重新生成时，再选择 2 建立新批次。不要删除唯一结果。</p><p>如果基线没有收敛，程序停止后续方案计算。如果报告包含未收敛方案，会明确标为诊断结果；小幅减阻仍需网格验证。</p></details>
+
+<footer>适用于当前已分区的机身舱盖与默认工况。软件和许可需要本机具备。教程简化不等于本次重新完成 CFD 计算。</footer>
+</main></body></html>

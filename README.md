@@ -1,5 +1,17 @@
 # VibeFlow 技能与舱盖 FFD 教程
 
+本仓库包含两个 AI 技能，以及一套舱盖 FFD 变形与 STAR-CCM+ 批量计算教程。这个 README 是下载与使用入口；具体操作和代码说明放在 HTML 中。
+
+## 从这里下载
+
+- **[舱盖变形与计算：下载运行包](https://raw.githubusercontent.com/zhuhuan0813-lab/vibeflow-skills/main/canopy-ffd-starccm/%E8%BF%90%E8%A1%8C%E6%96%87%E4%BB%B6.zip)**：教程、代码备注、注释源码和示例模型都在包内。解压后打开 `project`，先读 `详细说明.html`，再双击 `开始使用.cmd`。
+- **[给 AI 安装技能：下载技能包](https://raw.githubusercontent.com/zhuhuan0813-lab/vibeflow-skills/main/skills.zip)**：安装方法见下面的技能说明。
+- **[下载整个仓库](https://github.com/zhuhuan0813-lab/vibeflow-skills/archive/refs/heads/main.zip)**：包含上述两部分；也可在[仓库首页](https://github.com/zhuhuan0813-lab/vibeflow-skills)点击绿色 **Code → Download ZIP**。
+
+下载公开文件无需登录、无需安装 Git。ZIP 下载后先全部解压；HTML 下载后用浏览器打开。
+
+## 技能说明
+
 两个技能：飞行器设计、STAR-CCM+ 自动化。
 
 - **[下载技能 ZIP](./skills.zip?raw=true)**
